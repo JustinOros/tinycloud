@@ -19,7 +19,7 @@ docker compose up -d --build
 
 `join` prints one line and a short code. Send the line to the gateway owner. They run it, read the code back to you, and your node starts syncing.
 
-Your files live in `data/library`. Check on things with `./bin/tinycloud doctor`.
+Your files live in `data/library`. The first `tinycloud` command also creates a shortcut named `tinycloud` in your home folder, so you can copy files in from another machine with `scp book.epub NODE:tinycloud/`. Check on things with `./bin/tinycloud doctor`.
 
 ## Files
 
@@ -40,7 +40,7 @@ Scripts that run inside the agent container.
 | `agent/join.sh` | prints the line to send to the gateway owner |
 | `agent/confirm.sh` | confirms new peers in manual mode |
 | `agent/leave.sh` | leaves the cloud, keeps the files |
-| `bin/tinycloud` | the command people type: doctor, logs, debug, support, join, confirm, leave |
+| `bin/tinycloud` | the command people type: doctor, logs, debug, support, join, path, confirm, leave |
 | `firewall/` | nftables rules and the script that loads them |
 | `docker-compose.yml` | Syncthing and the agent, no published ports |
 | `tinycloud.conf.example` | all config keys |

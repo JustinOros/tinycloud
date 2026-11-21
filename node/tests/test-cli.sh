@@ -57,6 +57,29 @@ assert_eq "debug on dispatch" "exec -T agent sh /app/agent/debug.sh on" "$(cat "
 main join > /dev/null
 assert_eq "join dispatch" "exec -T agent sh /app/agent/join.sh" "$(cat "$CALLS")"
 assert_contains "usage lists join" "$(usage)" "join"
+mkdir -p "$TC_HOME/data/library" "$SANDBOX/h"
+TC_LINK_DIR=$SANDBOX/h
+export TC_LINK_DIR
+main path > /dev/null
+assert_eq "link created" "$TC_HOME/data/library" "$(readlink "$SANDBOX/h/tinycloud")"
+assert_eq "path command" "$TC_HOME/data/library" "$(main path)"
+ln -sfn /nowhere "$SANDBOX/h/tinycloud"
+main path > /dev/null
+assert_eq "wrong link repaired" "$TC_HOME/data/library" "$(readlink "$SANDBOX/h/tinycloud")"
+rm "$SANDBOX/h/tinycloud"
+mkdir "$SANDBOX/h/tinycloud"
+main path > /dev/null
+assert_eq "real folder left alone" 0 "$([ -L "$SANDBOX/h/tinycloud" ] && echo 1 || echo 0)"
+rmdir "$SANDBOX/h/tinycloud"
+printf 'x' > "$SANDBOX/h/tinycloud"
+main path > /dev/null
+assert_eq "real file left alone" x "$(cat "$SANDBOX/h/tinycloud")"
+rm "$SANDBOX/h/tinycloud"
+rm -rf "$TC_HOME/data"
+main path > /dev/null
+assert_eq "no link without library" 0 "$([ -e "$SANDBOX/h/tinycloud" ] && echo 1 || echo 0)"
+unset TC_LINK_DIR
+assert_contains "usage lists path" "$(usage)" "path"
 main debug sideways > /dev/null 2>&1
 assert_eq "debug bad arg returns 2" 2 "$?"
 
