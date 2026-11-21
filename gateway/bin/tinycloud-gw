@@ -18,6 +18,7 @@ usage: tinycloud-gw COMMAND
   approve NAME DEVICEID ROLE OWNER [--yes]   add a node
   remove NAME [--yes]                        remove a node
   list                                       show nodes and who is online
+  config                                     show the lines every node needs
   backup                                     save the gateway identity
   restore FILE [--yes]                       restore a saved identity
   version
@@ -269,8 +270,16 @@ cmd_list() {
     awk -F '\t' 'BEGIN {printf "%-20s %-12s %-16s %-8s %s\n", "NAME", "ROLE", "OWNER", "STATE", "ID"} {printf "%-20s %-12s %-16s %-8s %s\n", $1, $2, $3, $4, $5}'
 }
 
+cmd_config() {
+  if [ ! -r "$GW_HOME/node-lines.txt" ]; then
+    log ERROR "no saved node settings found, run gateway.sh first"
+    return 1
+  fi
+  cat "$GW_HOME/node-lines.txt"
+}
+
 backup_paths() {
-  for bp_item in .env state data/syncthing/config data/relay data/disco/cert.pem data/disco/key.pem audit.log; do
+  for bp_item in .env node-lines.txt state data/syncthing/config data/relay data/disco/cert.pem data/disco/key.pem audit.log; do
     if [ -e "$GW_HOME/$bp_item" ]; then
       printf '%s\n' "$bp_item"
     fi
@@ -354,6 +363,7 @@ main() {
     approve) cmd_approve "$@" ;;
     remove) cmd_remove "$@" ;;
     list) cmd_list ;;
+    config) cmd_config ;;
     backup) cmd_backup ;;
     restore) cmd_restore "$@" ;;
     version) echo "$GW_VERSION" ;;

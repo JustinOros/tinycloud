@@ -131,16 +131,6 @@ render_env() {
   printf 'GATEWAY_HOST=%s\nRELAY_TOKEN=%s\n' "$HOST" "$1"
 }
 
-has_ssh_key() {
-  if [ -s "${GW_ROOT_HOME:-/root}/.ssh/authorized_keys" ]; then
-    return 0
-  fi
-  if [ -n "${SUDO_USER:-}" ] && [ -s "/home/$SUDO_USER/.ssh/authorized_keys" ]; then
-    return 0
-  fi
-  return 1
-}
-
 install_packages() {
   run apt-get update
   run env DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl gnupg jq nftables fail2ban python3-systemd unattended-upgrades openssl
@@ -251,9 +241,11 @@ print_summary() {
     return 0
   fi
   token=$(existing_token)
-  printf '\nCopy these into each node tinycloud.conf:\n\n'
-  printf 'GATEWAY_HOST=%s\nGATEWAY_ID=%s\nRELAY_ID=%s\nDISCOVERY_ID=%s\nRELAY_TOKEN=%s\n\n' "$HOST" "$gateway_id" "$relay_id" "$disc_id" "$token"
-  printf 'Keep a private copy. The relay token is secret.\n'
+  ps_lines=$(printf 'GATEWAY_HOST=%s\nGATEWAY_ID=%s\nRELAY_ID=%s\nDISCOVERY_ID=%s\nRELAY_TOKEN=%s' "$HOST" "$gateway_id" "$relay_id" "$disc_id" "$token")
+  printf '%s\n' "$ps_lines" | put_file "$GW_HOME/node-lines.txt" 600
+  printf '\nCopy these into each node tinycloud.conf:\n\n%s\n\n' "$ps_lines"
+  printf 'They are saved in %s/node-lines.txt. Show them again with: tinycloud-gw config\n' "$GW_HOME"
+  printf 'The relay token is secret.\n'
 }
 
 main() {

@@ -60,6 +60,16 @@ os_supported() {
   esac
 }
 
+has_ssh_key() {
+  if [ -s "${GW_ROOT_HOME:-/root}/.ssh/authorized_keys" ]; then
+    return 0
+  fi
+  if [ -n "${SUDO_USER:-}" ] && [ -s "/home/$SUDO_USER/.ssh/authorized_keys" ]; then
+    return 0
+  fi
+  return 1
+}
+
 gen_token() {
   LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32
 }

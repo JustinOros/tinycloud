@@ -1,0 +1,3 @@
+source-path=SCRIPTDIR
+source-path=SCRIPTDIR/gateway
+disable=SC1090,SC1091,SC2016,SC2034,SC2154,SC2329

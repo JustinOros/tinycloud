@@ -4,15 +4,15 @@ One small Linode. Relay, discovery, and approvals. It never holds the library.
 
 ## Install
 
-On a fresh Debian 12 or Ubuntu 22.04+ server, as root:
+On a fresh Debian 12+ or Ubuntu 22.04+ server, as root:
 
 ```
-git clone https://github.com/JustinOros/tinycloud
-cd tinycloud/gateway
-sh gateway.sh --host gw.example.com
+curl -fsSL https://raw.githubusercontent.com/JustinOros/tinycloud/main/setup.sh -o setup.sh && sh setup.sh
 ```
 
-It prints five lines. Paste them into each node's `tinycloud.conf`. Keep a private copy. The relay token is secret.
+It asks a few questions, installs what is missing, and prints five lines for each node's `tinycloud.conf`. Show them again any time with `tinycloud-gw config`. The relay token is secret.
+
+Read `setup.sh` first if you like. It is short.
 
 ## Add a node
 
@@ -30,6 +30,7 @@ Check the 6 character code matches the node's page, then type `yes`.
 |---|---|
 | `tinycloud-gw remove NAME` | drops the node |
 | `tinycloud-gw list` | nodes and who is online |
+| `tinycloud-gw config` | the five lines every node needs |
 | `tinycloud-gw backup` | saves the gateway identity to `/root/tinycloud-backup/` |
 | `tinycloud-gw restore FILE` | puts a saved identity back |
 
@@ -37,7 +38,7 @@ Every approve, remove, backup, and restore is logged in `/opt/tinycloud-gateway/
 
 ## If the gateway dies
 
-1. Make a new Linode and run `gateway.sh` with the same `--host`.
+1. Make a new Linode and run `setup.sh` with the same hostname.
 2. Copy your backup file to it and run `tinycloud-gw restore FILE`.
 3. Move the old IP and hostname to the new Linode.
 

@@ -90,4 +90,20 @@ for f in "$sandbox"/out/*.tmp; do
 done
 assert_eq "no tmp left" 0 "$leftover"
 
+DRY_RUN=false
+GW_HOME=$sandbox/summary
+mkdir -p "$GW_HOME"
+printf 'GATEWAY_HOST=x\nRELAY_TOKEN=tok999\n' > "$GW_HOME/.env"
+HOST=gw.example.com
+gateway_id=$(mkid A)
+relay_id=$(mkid B)
+disc_id=$(mkid C)
+summary=$(print_summary)
+assert_contains "summary shows relay token" "$summary" "RELAY_TOKEN=tok999"
+assert_contains "summary mentions config command" "$summary" "tinycloud-gw config"
+saved=$(cat "$GW_HOME/node-lines.txt")
+assert_contains "lines saved host" "$saved" "GATEWAY_HOST=gw.example.com"
+assert_contains "lines saved discovery" "$saved" "DISCOVERY_ID=$(mkid C)"
+assert_eq "lines file private" 600 "$(stat -c %a "$GW_HOME/node-lines.txt" 2> /dev/null || stat -f %Lp "$GW_HOME/node-lines.txt")"
+
 finish
