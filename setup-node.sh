@@ -419,7 +419,9 @@ write_config() {
       printf 'DISCOVERY_ID=%s\n' "$D_ID"
       printf 'RELAY_TOKEN=%s\n' "$G_TOKEN"
     } > "$wc_tmp"
-  ) && mv "$wc_tmp" "$NODE_HOME/tinycloud.conf"
+  ) || return 1
+  chown 1000:1000 "$wc_tmp" 2> /dev/null || true
+  mv "$wc_tmp" "$NODE_HOME/tinycloud.conf"
 }
 
 link_command() {
@@ -498,7 +500,7 @@ finish_up() {
   if [ -n "$TARGET_USER" ] && [ "$TARGET_USER" != root ]; then
     say "To use tinycloud without sudo, log out and back in once."
   fi
-  say "Copy files to this node with: scp file.epub $TARGET_USER@THIS-HOST:tinycloud/"
+  say "Copy files to this node from another machine with: scp file.epub $TARGET_USER@$(hostname):tinycloud/"
 }
 
 main() {
