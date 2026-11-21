@@ -2,24 +2,15 @@
 
 ## Run a node
 
-On any machine with Docker and the `docker compose` plugin:
+On a Debian 12+ or Ubuntu 22.04+ machine, run:
 
 ```
-git clone https://github.com/JustinOros/tinycloud.git
-cd tinycloud/node
-cp tinycloud.conf.example tinycloud.conf
+curl -fsSL https://raw.githubusercontent.com/JustinOros/tinycloud/main/setup-node.sh -o setup-node.sh && sh setup-node.sh
 ```
 
-Edit `tinycloud.conf`. Set `NODE_NAME`, `OWNER`, `ROLE`, and paste in the five lines the gateway owner gives you (`tinycloud-gw config` on the gateway prints them). Then:
+It asks for a node name, owner, and role, then for the five lines the gateway owner gives you (`tinycloud-gw config` on the gateway prints them). It installs Docker if needed, starts the node, and prints one line. Send that line to the gateway owner. They run it, read the code back to you, and your node starts syncing.
 
-```
-docker compose up -d --build
-./bin/tinycloud join
-```
-
-`join` prints one line and a short code. Send the line to the gateway owner. They run it, read the code back to you, and your node starts syncing.
-
-Your files live in `data/library`. The first `tinycloud` command also creates a shortcut named `tinycloud` in your home folder, so you can copy files in from another machine with `scp book.epub NODE:tinycloud/`. Check on things with `./bin/tinycloud doctor`.
+Your files live in `data/library`, and the setup makes a shortcut named `tinycloud` in your home folder. Copy files in from another machine with `scp book.epub NODE:tinycloud/`. Check on things with `tinycloud doctor`.
 
 ## Files
 
