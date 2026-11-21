@@ -41,7 +41,7 @@ table inet tinycloud {
     iifname "docker0" oifname "docker0" accept
     ct state established,related accept
     ct state invalid drop
-    ct status dnat ip saddr @lan4 tcp dport 80 accept
+    ct status dnat ip saddr @lan4 tcp dport 8080 accept
     ip daddr $GATEWAY tcp dport { 22000, 22067, 8443 } accept
     ip daddr $ROUTER meta l4proto { tcp, udp } th dport 53 accept
     ip daddr != @lan4 meta l4proto { tcp, udp } th dport 53 accept

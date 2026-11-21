@@ -4,7 +4,7 @@ services:
     user: "0:0"
     command: >
       sh -c "mkdir -p /data/system/peers /data/system/status-out /data/system/view &&
-      chown -R 1000:1000 /data/system /state /logs"
+      chown -R 1000:1000 /data/system /state /logs /web"
     cap_drop: [ALL]
     cap_add: [CHOWN, DAC_OVERRIDE]
     security_opt: ["no-new-privileges:true"]
@@ -12,6 +12,7 @@ services:
       - system:/data/system
       - state:/state
       - logs:/logs
+      - web:/web
 
   syncthing:
     image: syncthing/syncthing:1.29
@@ -46,6 +47,7 @@ services:
       - system:/data/system
       - state:/state
       - logs:/logs
+      - web:/web
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
@@ -57,7 +59,24 @@ services:
       init:
         condition: service_completed_successfully
 
+  web:
+    image: alpine:3.20
+    user: "1000:1000"
+    command: ["busybox", "httpd", "-f", "-p", "8080", "-h", "/web"]
+    ports:
+      - "${TC_STATUS_BIND:-127.0.0.1:8080}:8080"
+    volumes:
+      - web:/web:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
 volumes:
+  web:
   system:
   state:
   logs:

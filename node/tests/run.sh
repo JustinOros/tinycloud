@@ -8,7 +8,7 @@ for t in "$HERE"/test-*.sh; do
 done
 
 if command -v shellcheck > /dev/null 2>&1; then
-  shellcheck -x -s sh "$ROOT"/agent/*.sh "$ROOT"/firewall/*.sh "$HERE"/*.sh || failed=1
+  shellcheck -x -s sh "$ROOT"/agent/*.sh "$ROOT"/firewall/*.sh "$ROOT"/bin/* "$HERE"/*.sh || failed=1
 else
   echo "shellcheck not installed, skipped"
 fi

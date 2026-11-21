@@ -43,7 +43,8 @@ valid_name() { valid "$1" '^[a-z0-9-]{1,32}$'; }
 valid_device_id() { valid "$1" '^[A-Z2-7]{7}(-[A-Z2-7]{7}){7}$'; }
 valid_host() { valid "$1" '^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$'; }
 valid_token() { valid "$1" '^[A-Za-z0-9_-]{1,128}$'; }
-valid_int() { valid "$1" '^[0-9]{1,9}$'; }
+valid_tz() { valid "$1" '^[A-Za-z0-9_/+-]{1,64}$'; }
+valid_int() { valid "$1" '^[0-9]{1,12}$'; }
 
 valid_role() {
   case $1 in
@@ -82,6 +83,18 @@ sha256() {
   else
     shasum -a 256 "$1" | cut -d ' ' -f 1
   fi
+}
+
+sha256_text() {
+  if command -v sha256sum > /dev/null 2>&1; then
+    printf '%s' "$1" | sha256sum | cut -d ' ' -f 1
+  else
+    printf '%s' "$1" | shasum -a 256 | cut -d ' ' -f 1
+  fi
+}
+
+verify_code() {
+  sha256_text "$1" | cut -c 1-6 | tr '[:lower:]' '[:upper:]'
 }
 
 write_atomic() {

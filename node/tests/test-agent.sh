@@ -30,16 +30,16 @@ setup() {
 
 setup
 main
-assert_eq "first run does everything" "firstboot apply-peers status" "$(tr '\n' ' ' < "$STEPS" | sed 's/ $//')"
+assert_eq "first run does everything" "firstboot apply-peers debug status render" "$(tr '\n' ' ' < "$STEPS" | sed 's/ $//')"
 : > "$STEPS"
 main
-assert_eq "second run skips status" "firstboot apply-peers" "$(tr '\n' ' ' < "$STEPS" | sed 's/ $//')"
+assert_eq "second run skips status" "firstboot apply-peers debug render" "$(tr '\n' ' ' < "$STEPS" | sed 's/ $//')"
 : > "$STEPS"
 main
-assert_eq "third run writes status" "firstboot apply-peers status" "$(tr '\n' ' ' < "$STEPS" | sed 's/ $//')"
+assert_eq "third run writes status" "firstboot apply-peers debug status render" "$(tr '\n' ' ' < "$STEPS" | sed 's/ $//')"
 : > "$STEPS"
 main
-assert_eq "fourth run skips status" "firstboot apply-peers" "$(tr '\n' ' ' < "$STEPS" | sed 's/ $//')"
+assert_eq "fourth run skips status" "firstboot apply-peers debug render" "$(tr '\n' ' ' < "$STEPS" | sed 's/ $//')"
 
 setup
 STEP_FAIL=firstboot
@@ -52,6 +52,12 @@ STEP_FAIL=apply-peers
 main
 assert_eq "apply failure reports error" 1 "$?"
 assert_contains "status still runs" "$(cat "$STEPS")" "status"
+
+setup
+date > "$TC_STATE_DIR/left"
+main > /dev/null
+assert_eq "left node does nothing and succeeds" 0 "$?"
+assert_eq "left node runs no steps" 0 "$(wc -l < "$STEPS" | tr -d ' ')"
 
 setup
 FAKE_FAIL="GET /rest/system/ping"

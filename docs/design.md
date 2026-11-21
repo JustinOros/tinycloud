@@ -45,7 +45,7 @@ Nobody ever auto-accepts a folder or a device. The introducer feature is never u
 
 ## Joining
 
-1. The node makes its own ID on first boot and shows it on a local page with a short code and QR.
+1. The node makes its own ID on first boot and shows it on a local page with a short code and QR. The code is the first 6 characters of the SHA-256 of the device ID.
 2. The person sends the owner one line: `NAME DEVICEID ROLE OWNER`.
 3. The owner runs `tinycloud approve "<line>"`. It prints the code to compare with the person.
 4. Every node picks up the new peer on its next check. Nothing to accept.
@@ -129,10 +129,15 @@ Pi images keep it on the FAT partition named TINYCLOUD and delete it after first
 - `tinycloud logs` shows recent lines.
 - `tinycloud debug on` turns on extra Syncthing logging for 30 minutes, then off.
 - `tinycloud support` makes one text bundle to paste in a chat. No secrets, no IPs.
+- `tinycloud confirm` lists and confirms new peers (manual mode only).
+- `tinycloud leave` leaves the cloud. Files stay on the node.
 
 ## Local status page
 
-Each node serves a read-only page on the LAN (port 80): ID, code, QR, and state. It holds no secrets and no config. This is the one inbound rule added to the brief.
+Each node serves a read-only page: connection state, space, warnings, and (until connected) the join line, code, and QR. It holds no secrets and no config. It refreshes every minute.
+
+- Pi images: LAN only, port 80. This is the one inbound rule added to the brief.
+- Docker nodes: `127.0.0.1:8080` by default (`TC_STATUS_BIND` changes it).
 
 ## Discord bot (optional, off by default)
 
