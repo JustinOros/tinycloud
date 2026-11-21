@@ -16,13 +16,13 @@ Read `setup.sh` first if you like. It is short.
 
 ## Add a node
 
-The node's status page shows a join line. On the gateway:
+On the new node, run `tinycloud join`. It prints a line and a 6 character code. Send the person's line to the gateway owner, who runs it on the gateway:
 
 ```
 tinycloud-gw approve NAME DEVICEID ROLE OWNER
 ```
 
-Check the 6 character code matches the node's page, then type `yes`.
+Check that the code it shows matches the one on the node, then type `yes`.
 
 ## Other commands
 

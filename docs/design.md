@@ -9,8 +9,8 @@ A private file cloud for trusted friends. Nodes sync your shared files through a
 | Syncthing | every node and the gateway | syncs files |
 | Relay and discovery | gateway | lets nodes find and reach each other |
 | Agent | every node | small script, talks only to its own Syncthing |
-| Aggregator | gateway | builds status views |
-| `tinycloud` command | nodes | doctor, logs, debug, support, confirm, leave |
+| Aggregator | gateway | builds status views (not built yet) |
+| `tinycloud` command | nodes | doctor, logs, debug, support, join, path, confirm, leave |
 | `tinycloud-gw` command | gateway | approve, remove, list, backup, restore |
 
 The gateway never stores the library. Anchor nodes hold full copies.
@@ -46,8 +46,8 @@ Nobody ever auto-accepts a folder or a device. The introducer feature is never u
 
 ## Joining
 
-1. The node makes its own ID on first boot and shows it on a local page with a short code and QR. The code is the first 6 characters of the SHA-256 of the device ID.
-2. The person sends the owner one line: `NAME DEVICEID ROLE OWNER`.
+1. The node makes its own ID on first boot. `tinycloud join` prints one line and a short code. The local status page shows them too, with a QR. The code is the first 6 characters of the SHA-256 of the device ID.
+2. The person sends the owner the line: `tinycloud-gw approve NAME DEVICEID ROLE OWNER`.
 3. The owner runs `tinycloud-gw approve NAME DEVICEID ROLE OWNER` on the gateway. It prints the code to compare with the person.
 4. Every node picks up the new peer on its next check. Nothing to accept.
 5. `tinycloud-gw remove NAME` undoes it. `tinycloud leave` on a node leaves.
@@ -119,7 +119,7 @@ PEERS_CONFIRM=auto
 SMB_ENABLED=false
 ```
 
-Pi images keep it on the FAT partition named TINYCLOUD and delete it after first boot. Docker nodes keep it next to `docker-compose.yml`.
+Pi images keep it on the FAT partition named TINYCLOUD and delete it after first boot. Docker nodes keep it next to `docker-compose.yml`. `setup-node.sh` puts it in `/opt/tinycloud-node`.
 
 ## Logs and debug
 
@@ -132,6 +132,10 @@ Pi images keep it on the FAT partition named TINYCLOUD and delete it after first
 - `tinycloud support` makes one text bundle to paste in a chat. No secrets, no IPs.
 - `tinycloud confirm` lists and confirms new peers (manual mode only).
 - `tinycloud leave` leaves the cloud. Files stay on the node.
+
+## Adding files
+
+Every node has a shortcut named `tinycloud` in its owner's home folder, pointing at the library. From another machine: `scp book.epub NODE:tinycloud/`. `tinycloud path` prints the real location.
 
 ## Local status page
 
@@ -158,12 +162,12 @@ Phase 5. Read-only. Lives in `apps/discord-bot/`. Each owner runs their own.
 
 ## Dashboard
 
-`tinycloud dashboard` on the gateway owner's computer fetches the full view over SSH and opens a page on localhost. Each friend sees only their own nodes. The page escapes all text.
+Planned: `tinycloud dashboard` on the gateway owner's computer fetches the full view over SSH and opens a page on localhost. Each friend sees only their own nodes. The page escapes all text.
 
 ## If the gateway goes down
 
 - Sync stops for everyone. Nodes keep their files.
-- Fix: build a new Linode, run `gateway.sh`, restore the identity backup, and keep the same IP and hostname.
+- Fix: build a new Linode, run `setup.sh`, restore the identity backup, and keep the same IP and hostname.
 - `tinycloud-gw backup` saves the gateway identity (keys, IDs, relay token, approved list).
 
 ## Later: more than one gateway
@@ -184,20 +188,26 @@ Phase 5. Read-only. Lives in `apps/discord-bot/`. Each owner runs their own.
 - Admins and anchors can read the data.
 - Syncthing is the main attack surface. Keep it updated.
 
-## To verify in Phase 1
+## Verified
 
-- Sync works through the relay with the firewall open only to the gateway.
-- The relay token works in the listen address.
+- Sync works both ways through the relay, between a Docker node on Unraid and an Orange Pi on another network.
+- The relay token works.
+- `tinycloud-gw approve` works against a real Syncthing.
+
+## Still to verify
+
+- The firewall on a Pi, open only to the gateway.
 - Nodes on the same LAN do not try direct connections.
 - Min free space and pull order behave on a nearly full card.
 - Gateway RAM stays fine on 1 GB.
 - No secret in any log or support bundle.
-- Everything works on both Debian and Ubuntu.
+- Everything works on Ubuntu as well as Debian.
+- `tinycloud-gw remove` against a real Syncthing.
 
 ## Build order
 
-1. Node stack: Syncthing, agent, status page, firewall, doctor.
-2. Docker node.
-3. Gateway and aggregator.
-4. Approval commands.
-5. Test with rocky, grace, and Finn's Linode.
+1. Node stack: Syncthing, agent, status page, firewall, doctor. Done.
+2. Docker node. Done.
+3. Gateway. Done. Aggregator: not yet.
+4. Approval commands. Done.
+5. Test with rocky, grace, and Finn's Linode. Grace and a Docker node are done.
