@@ -1,0 +1,16 @@
+table inet tinycloud_gw
+delete table inet tinycloud_gw
+
+table inet tinycloud_gw {
+  chain input {
+    type filter hook input priority 0; policy drop;
+    iifname "lo" accept
+    ct state established,related accept
+    ct state invalid drop
+    icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert } accept
+    icmp type echo-request limit rate 5/second accept
+    icmpv6 type echo-request limit rate 5/second accept
+    tcp dport SSH_PORT accept
+    tcp dport { 22000, 22067, 8443 } accept
+  }
+}

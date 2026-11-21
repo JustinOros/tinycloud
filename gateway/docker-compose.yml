@@ -1,0 +1,62 @@
+services:
+  syncthing:
+    image: syncthing/syncthing:1.29
+    network_mode: host
+    user: "1000:1000"
+    restart: unless-stopped
+    environment:
+      - STGUIADDRESS=127.0.0.1:8384
+      - STNODEFAULTFOLDER=1
+    volumes:
+      - ./data/syncthing:/var/syncthing
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 300m
+
+  relay:
+    image: syncthing/relaysrv:latest
+    network_mode: host
+    user: "1000:1000"
+    restart: unless-stopped
+    command:
+      - -keys=/relay-keys
+      - -token=${RELAY_TOKEN}
+      - -pools=
+      - -listen=:22067
+      - -status-srv=127.0.0.1:22070
+    volumes:
+      - ./data/relay:/relay-keys
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+
+  discovery:
+    image: syncthing/discosrv:latest
+    network_mode: host
+    user: "1000:1000"
+    restart: unless-stopped
+    command:
+      - -listen=:8443
+      - -db-dir=/disco/db
+      - -cert=/disco/cert.pem
+      - -key=/disco/key.pem
+    volumes:
+      - ./data/disco:/disco
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m

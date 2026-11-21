@@ -1,0 +1,370 @@
+#!/bin/sh
+GW_HOME=${GW_HOME:-/opt/tinycloud-gateway}
+GW_LIB_DIR=${GW_LIB_DIR:-$GW_HOME}
+. "$GW_LIB_DIR/lib.sh"
+
+GW_STATE=$GW_HOME/state
+APPROVED=$GW_STATE/approved.json
+AUDIT=$GW_HOME/audit.log
+FOLDERS_DIR=$GW_HOME/data/syncthing
+BACKUP_DIR=${GW_BACKUP_DIR:-/root/tinycloud-backup}
+GW_VERSION=$(cat "$GW_LIB_DIR/VERSION" 2> /dev/null || echo unknown)
+ASSUME_YES=0
+
+usage() {
+  cat <<EOT
+usage: tinycloud-gw COMMAND
+
+  approve NAME DEVICEID ROLE OWNER [--yes]   add a node
+  remove NAME [--yes]                        remove a node
+  list                                       show nodes and who is online
+  backup                                     save the gateway identity
+  restore FILE [--yes]                       restore a saved identity
+  version
+EOT
+}
+
+audit() {
+  au_line="$(date -u +%Y-%m-%dT%H:%M:%SZ) $(printf '%s' "$*" | tr -c '[:print:]' '?')"
+  mkdir -p "$GW_HOME"
+  if [ -f "$AUDIT" ] && [ "$(wc -c < "$AUDIT")" -gt 1048576 ]; then
+    mv "$AUDIT" "$AUDIT.1"
+  fi
+  printf '%s\n' "$au_line" >> "$AUDIT"
+}
+
+require_root() {
+  if [ "${GW_ALLOW_NONROOT:-0}" != 1 ] && [ "$(id -u)" -ne 0 ]; then
+    log ERROR "run as root"
+    return 1
+  fi
+}
+
+lock() {
+  mkdir -p "$GW_STATE"
+  if mkdir "$GW_STATE/.lock" 2> /dev/null; then
+    printf '%s' "$$" > "$GW_STATE/.lock/pid"
+    return 0
+  fi
+  lk_pid=$(cat "$GW_STATE/.lock/pid" 2> /dev/null || true)
+  if [ -n "$lk_pid" ] && ! kill -0 "$lk_pid" 2> /dev/null; then
+    rm -rf "$GW_STATE/.lock"
+    lock
+    return $?
+  fi
+  log ERROR "another tinycloud-gw command is running"
+  return 1
+}
+
+unlock() {
+  rm -rf "$GW_STATE/.lock"
+}
+
+locked() {
+  lock || return 1
+  "$@"
+  lc_rc=$?
+  unlock
+  return $lc_rc
+}
+
+confirm() {
+  if [ "$ASSUME_YES" = 1 ]; then
+    return 0
+  fi
+  printf 'Type yes to continue: '
+  read -r cf_answer || return 1
+  [ "$cf_answer" = yes ]
+}
+
+dc() {
+  docker compose -f "$GW_HOME/docker-compose.yml" --project-directory "$GW_HOME" "$@"
+}
+
+own() {
+  if [ "$(id -u)" -ne 0 ]; then
+    return 0
+  fi
+  chown -R 1000:1000 "$1"
+}
+
+folder_dir() {
+  printf '%s/%s' "$FOLDERS_DIR" "$1"
+}
+
+ensure_folder_dir() {
+  efd=$(folder_dir "$1")
+  mkdir -p "$efd/.stfolder"
+  own "$efd"
+}
+
+load_approved() {
+  if [ -s "$APPROVED" ]; then
+    cat "$APPROVED"
+  else
+    printf '[]'
+  fi
+}
+
+dev_objs() {
+  printf '%s' "$1" | jq -c 'map({deviceID: .})'
+}
+
+ensure_folder() {
+  if st_api GET "/rest/config/folders/$1" > /dev/null 2>&1; then
+    return 0
+  fi
+  ensure_folder_dir "$1"
+  put_folder "$1" "$2" "/var/syncthing/$1" "$3" "$(dev_objs "$4")"
+}
+
+set_folder_devices() {
+  sd_body=$(jq -nc --argjson d "$(dev_objs "$2")" '{devices: $d}')
+  st_api PATCH "/rest/config/folders/$1" "$sd_body" > /dev/null
+}
+
+publish_peers() {
+  pp_list=$(load_approved)
+  if [ "$(printf '%s' "$pp_list" | jq 'length')" -eq 0 ]; then
+    log WARN "no nodes left, peers.json not changed"
+    return 0
+  fi
+  ensure_folder_dir tinycloud-peers
+  pp_dir=$(folder_dir tinycloud-peers)
+  printf '%s' "$pp_list" | jq -c '{version: 1, peers: map({id, name, role, owner})}' > "$pp_dir/.syncthing.peers.json.tmp"
+  mv "$pp_dir/.syncthing.peers.json.tmp" "$pp_dir/peers.json"
+  own "$pp_dir"
+  if ! st_api POST "/rest/db/scan?folder=tinycloud-peers" > /dev/null; then
+    log WARN "could not trigger a scan, it will be picked up shortly"
+  fi
+}
+
+sync_shared_folders() {
+  ss_gw=$1
+  ss_list=$2
+  ss_all=$(printf '%s' "$ss_list" | jq -c --arg gw "$ss_gw" '[$gw] + map(.id)')
+  ensure_folder tinycloud-peers "TinyCloud Peers" sendonly "$(jq -nc --arg gw "$ss_gw" '[$gw]')" || return 1
+  set_folder_devices tinycloud-peers "$ss_all"
+}
+
+sync_view_folder() {
+  sv_gw=$1
+  sv_list=$2
+  sv_owner=$3
+  sv_ids=$(printf '%s' "$sv_list" | jq -c --arg gw "$sv_gw" --arg o "$sv_owner" '[$gw] + [.[] | select(.owner == $o) | .id]')
+  if [ "$(printf '%s' "$sv_ids" | jq 'length')" -le 1 ]; then
+    st_api DELETE "/rest/config/folders/tc-view-$sv_owner" > /dev/null 2>&1 || true
+    return 0
+  fi
+  ensure_folder "tc-view-$sv_owner" "TinyCloud View" sendonly "$(jq -nc --arg gw "$sv_gw" '[$gw]')" || return 1
+  set_folder_devices "tc-view-$sv_owner" "$sv_ids"
+}
+
+do_approve() {
+  ap_n=0
+  ap_name=
+  ap_id=
+  ap_role=
+  ap_owner=
+  for ap_arg in "$@"; do
+    case $ap_arg in
+      --yes) ASSUME_YES=1 ;;
+      *)
+        ap_n=$((ap_n + 1))
+        case $ap_n in
+          1) ap_name=$ap_arg ;;
+          2) ap_id=$ap_arg ;;
+          3) ap_role=$ap_arg ;;
+          4) ap_owner=$ap_arg ;;
+        esac
+        ;;
+    esac
+  done
+  if [ "$ap_n" -ne 4 ]; then
+    usage
+    return 1
+  fi
+  valid_name "$ap_name" || { log ERROR "bad node name"; return 1; }
+  valid_device_id "$ap_id" || { log ERROR "bad device id"; return 1; }
+  valid_role "$ap_role" || { log ERROR "bad role, use anchor, contributor, partial, or reader"; return 1; }
+  valid_name "$ap_owner" || { log ERROR "bad owner name"; return 1; }
+  ap_list=$(load_approved)
+  if [ "$(printf '%s' "$ap_list" | jq --arg n "$ap_name" 'any(.[]; .name == $n)')" = true ]; then
+    log ERROR "a node named $ap_name already exists"
+    return 1
+  fi
+  if [ "$(printf '%s' "$ap_list" | jq --arg i "$ap_id" 'any(.[]; .id == $i)')" = true ]; then
+    log ERROR "that device id is already approved"
+    return 1
+  fi
+  if [ "$(printf '%s' "$ap_list" | jq 'length')" -ge 64 ]; then
+    log ERROR "limit of 64 nodes reached"
+    return 1
+  fi
+  ap_gw=$(st_api GET /rest/system/status | jq -r '.myID // empty')
+  valid_device_id "$ap_gw" || { log ERROR "cannot read the gateway id"; return 1; }
+  if [ "$ap_id" = "$ap_gw" ]; then
+    log ERROR "that is the gateway's own id"
+    return 1
+  fi
+  printf 'Node: %s\nRole: %s\nOwner: %s\nVerification code: %s\n' "$ap_name" "$ap_role" "$ap_owner" "$(verify_code "$ap_id")"
+  printf 'The node status page must show the same code.\n'
+  confirm || { echo "cancelled"; return 1; }
+  ap_new=$(printf '%s' "$ap_list" | jq -c --arg n "$ap_name" --arg i "$ap_id" --arg r "$ap_role" --arg o "$ap_owner" '. + [{name: $n, id: $i, role: $r, owner: $o}]')
+  ap_fail="approve failed, nothing was published. run it again, or tinycloud-gw remove $ap_name to clean up"
+  put_device "$ap_id" "$ap_name" '["dynamic"]' || { log ERROR "$ap_fail"; return 1; }
+  sync_shared_folders "$ap_gw" "$ap_new" || { log ERROR "$ap_fail"; return 1; }
+  ensure_folder "tc-status-$ap_name" "TinyCloud Status" receiveonly "$(jq -nc --arg a "$ap_gw" --arg b "$ap_id" '[$a, $b]')" || { log ERROR "$ap_fail"; return 1; }
+  sync_view_folder "$ap_gw" "$ap_new" "$ap_owner" || { log ERROR "$ap_fail"; return 1; }
+  write_atomic "$APPROVED" "$ap_new"
+  publish_peers
+  audit "approve $ap_name $ap_id $ap_role $ap_owner"
+  log INFO "approved $ap_name"
+}
+
+do_remove() {
+  rm_name=
+  for rm_arg in "$@"; do
+    case $rm_arg in
+      --yes) ASSUME_YES=1 ;;
+      *) rm_name=$rm_arg ;;
+    esac
+  done
+  valid_name "$rm_name" || { usage; return 1; }
+  rm_list=$(load_approved)
+  rm_entry=$(printf '%s' "$rm_list" | jq -c --arg n "$rm_name" '.[] | select(.name == $n)')
+  if [ -z "$rm_entry" ]; then
+    log ERROR "no node named $rm_name"
+    return 1
+  fi
+  rm_id=$(printf '%s' "$rm_entry" | jq -r '.id')
+  rm_owner=$(printf '%s' "$rm_entry" | jq -r '.owner')
+  printf 'Remove node %s (owner %s). Its device is dropped and the others stop syncing with it.\n' "$rm_name" "$rm_owner"
+  confirm || { echo "cancelled"; return 1; }
+  rm_gw=$(st_api GET /rest/system/status | jq -r '.myID // empty')
+  valid_device_id "$rm_gw" || { log ERROR "cannot read the gateway id"; return 1; }
+  rm_new=$(printf '%s' "$rm_list" | jq -c --arg n "$rm_name" 'map(select(.name != $n))')
+  write_atomic "$APPROVED" "$rm_new"
+  publish_peers
+  if [ "$(printf '%s' "$rm_new" | jq 'length')" -gt 0 ]; then
+    sync_shared_folders "$rm_gw" "$rm_new" || log WARN "could not update the peers folder"
+  fi
+  sync_view_folder "$rm_gw" "$rm_new" "$rm_owner" || log WARN "could not update the view folder"
+  st_api DELETE "/rest/config/folders/tc-status-$rm_name" > /dev/null 2>&1 || log WARN "status folder was already gone"
+  st_api DELETE "/rest/config/devices/$rm_id" > /dev/null 2>&1 || log WARN "device was already gone"
+  rm -rf "$(folder_dir "tc-status-$rm_name")"
+  audit "remove $rm_name $rm_id"
+  log INFO "removed $rm_name"
+}
+
+cmd_list() {
+  ls_list=$(load_approved)
+  if [ "$(printf '%s' "$ls_list" | jq 'length')" -eq 0 ]; then
+    echo "no nodes yet"
+    return 0
+  fi
+  ls_conns=$(st_api GET /rest/system/connections 2> /dev/null || printf '{}')
+  printf '%s' "$ls_list" | jq -r --argjson c "$ls_conns" \
+    '.[] | [.name, .role, .owner, (if ($c.connections // null) == null then "?" elif $c.connections[.id].connected == true then "online" else "offline" end), .id[0:7]] | @tsv' |
+    awk -F '\t' 'BEGIN {printf "%-20s %-12s %-16s %-8s %s\n", "NAME", "ROLE", "OWNER", "STATE", "ID"} {printf "%-20s %-12s %-16s %-8s %s\n", $1, $2, $3, $4, $5}'
+}
+
+backup_paths() {
+  for bp_item in .env state data/syncthing/config data/relay data/disco/cert.pem data/disco/key.pem audit.log; do
+    if [ -e "$GW_HOME/$bp_item" ]; then
+      printf '%s\n' "$bp_item"
+    fi
+  done
+}
+
+cmd_backup() {
+  bk_paths=$(backup_paths)
+  if [ -z "$bk_paths" ]; then
+    log ERROR "nothing to back up in $GW_HOME"
+    return 1
+  fi
+  (umask 077 && mkdir -p "$BACKUP_DIR")
+  chmod 700 "$BACKUP_DIR"
+  bk_out="$BACKUP_DIR/tinycloud-gateway-$(date +%Y%m%d-%H%M%S).tar.gz"
+  printf '%s\n' "$bk_paths" | (umask 077 && tar czf "$bk_out" --exclude='data/syncthing/config/index-*' -C "$GW_HOME" -T -)
+  chmod 600 "$bk_out"
+  bk_old=$(find "$BACKUP_DIR" -maxdepth 1 -name 'tinycloud-gateway-*.tar.gz' | sort -r | tail -n +11)
+  for bk_file in $bk_old; do
+    rm -f "$bk_file"
+  done
+  audit "backup $bk_out"
+  printf 'Saved: %s\n' "$bk_out"
+  bk_host=$(sed -n 's/^GATEWAY_HOST=//p' "$GW_HOME/.env" 2> /dev/null | tail -n 1)
+  printf 'It holds secrets. Copy it off this server, for example:\n  scp root@%s:%s .\n' "${bk_host:-GATEWAY}" "$bk_out"
+}
+
+safe_archive() {
+  sa_list=$(tar tzf "$1" 2> /dev/null) || return 1
+  if printf '%s\n' "$sa_list" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+    return 1
+  fi
+  printf '%s\n' "$sa_list" | grep -Eq '^(\./)?data/syncthing/config/config\.xml$'
+}
+
+do_restore() {
+  rs_file=
+  for rs_arg in "$@"; do
+    case $rs_arg in
+      --yes) ASSUME_YES=1 ;;
+      *) rs_file=$rs_arg ;;
+    esac
+  done
+  if [ -z "$rs_file" ] || [ ! -f "$rs_file" ]; then
+    usage
+    return 1
+  fi
+  if ! safe_archive "$rs_file"; then
+    log ERROR "that file is not a valid gateway backup"
+    return 1
+  fi
+  echo "This replaces the gateway identity on this server with the backup."
+  confirm || { echo "cancelled"; return 1; }
+  dc down || { log ERROR "could not stop the stack"; return 1; }
+  tar xzf "$rs_file" -C "$GW_HOME" || { log ERROR "could not unpack the backup"; return 1; }
+  own "$GW_HOME/data"
+  ensure_folder_dir tinycloud-peers
+  rs_list=$(load_approved)
+  for rs_name in $(printf '%s' "$rs_list" | jq -r '.[].name'); do
+    ensure_folder_dir "tc-status-$rs_name"
+  done
+  for rs_owner in $(printf '%s' "$rs_list" | jq -r '[.[].owner] | unique | .[]'); do
+    ensure_folder_dir "tc-view-$rs_owner"
+  done
+  dc up -d || { log ERROR "could not start the stack"; return 1; }
+  st_wait 90 || return 1
+  publish_peers
+  audit "restore $rs_file"
+  log INFO "restored"
+}
+
+cmd_approve() { locked do_approve "$@"; }
+cmd_remove() { locked do_remove "$@"; }
+cmd_restore() { locked do_restore "$@"; }
+
+main() {
+  require_root || return 1
+  mc_cmd=${1:-help}
+  [ $# -gt 0 ] && shift
+  case $mc_cmd in
+    approve) cmd_approve "$@" ;;
+    remove) cmd_remove "$@" ;;
+    list) cmd_list ;;
+    backup) cmd_backup ;;
+    restore) cmd_restore "$@" ;;
+    version) echo "$GW_VERSION" ;;
+    help | -h | --help) usage ;;
+    *)
+      usage
+      return 1
+      ;;
+  esac
+}
+
+if [ "${GW_NO_MAIN:-}" != 1 ]; then
+  main "$@"
+fi

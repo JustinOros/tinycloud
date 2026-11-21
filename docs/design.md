@@ -159,6 +159,23 @@ Phase 5. Read-only. Lives in `apps/discord-bot/`. Each owner runs their own.
 
 `tinycloud dashboard` on the gateway owner's Mac fetches the full view over SSH and opens a page on localhost. Each friend sees only their own nodes. The page escapes all text.
 
+## If the gateway goes down
+
+- Sync stops for everyone. Nodes keep their files.
+- Fix: build a new Linode, run `gateway.sh`, restore the identity backup, and keep the same IP and hostname.
+- `tinycloud-gw backup` saves the gateway identity (keys, IDs, relay token, approved list).
+
+## Later: more than one gateway
+
+- Each owner runs a gateway on their own Linode.
+- Every node lists all gateways. One is preferred, the rest are failover.
+- Which gateway a node uses and who owns it are separate. A node owned by justin can connect through finn's gateway.
+- Each owner signs their own node list. Nodes accept justin's signature only for `OWNER=justin` and finn's only for `OWNER=finn`.
+- Gateways are plain infrastructure: relay, discovery, sync. They cannot add devices.
+- Adding a gateway needs one owner's signature on the gateway list.
+- The library syncs to every node that its role allows.
+- Not built yet. The single gateway comes first.
+
 ## Known limits
 
 - A gateway owner can add a device that then gets the library. `PEERS_CONFIRM=manual` blocks that on a node.
