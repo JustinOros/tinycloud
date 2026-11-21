@@ -143,7 +143,7 @@ function render() {
   }
   const table = el('table');
   const head = el('tr');
-  ['Node', 'Owner', 'Role', 'State', 'Stored', 'Free', 'Version', 'Last report', 'Warnings'].forEach((h, i) => {
+  ['Node', 'Owner', 'Role', 'State', 'Stored', 'Free', 'Version', 'Last status change', 'Warnings'].forEach((h, i) => {
     const th = el('th', h);
     if (i === 2 || i === 6) th.className = 'hide';
     head.appendChild(th);
