@@ -53,6 +53,10 @@ assert_contains "logs localized" "$out" "2026-11-21 10:38:38 AM log line"
 : > "$CALLS"
 main debug on > /dev/null
 assert_eq "debug on dispatch" "exec -T agent sh /app/agent/debug.sh on" "$(cat "$CALLS")"
+: > "$CALLS"
+main join > /dev/null
+assert_eq "join dispatch" "exec -T agent sh /app/agent/join.sh" "$(cat "$CALLS")"
+assert_contains "usage lists join" "$(usage)" "join"
 main debug sideways > /dev/null 2>&1
 assert_eq "debug bad arg returns 2" 2 "$?"
 

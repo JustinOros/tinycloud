@@ -161,6 +161,7 @@ usage: tinycloud COMMAND
   logs [NAME]       show recent logs (agent, syncthing, web)
   debug on|off      extra Syncthing logging for 30 minutes
   support           write one text file to paste when asking for help
+  join              print the line to send to the gateway owner
   confirm [NAME]    list or confirm new peers (PEERS_CONFIRM=manual)
   leave             leave the cloud, files stay here
   version           show the version
@@ -174,6 +175,7 @@ main() {
     doctor) agent_run doctor ;;
     logs) cmd_logs "$@" ;;
     debug) cmd_debug "$@" ;;
+    join) agent_run join ;;
     support) cmd_support ;;
     confirm) cmd_confirm "$@" ;;
     leave) cmd_leave ;;
