@@ -6,4 +6,4 @@ A private file cloud for trusted friends. Nodes sync your shared files through a
 - [Gateway setup](docs/gateway.md)
 - [Run a node](node/README.md)
 
-Status: early. One gateway and two nodes sync files both ways. The dashboard, site, and Pi images are not built yet.
+Status: early. One gateway and two nodes sync files both ways. The site and Pi images are not built yet.

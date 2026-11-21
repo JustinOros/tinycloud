@@ -127,8 +127,23 @@ render_firewall() {
   sed "s/SSH_PORT/$SSH_PORT/" "$GW_DIR/firewall.nft"
 }
 
+render_aggregate_service() {
+  printf '[Unit]\nDescription=TinyCloud status views\n\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/tinycloud-gw aggregate\n'
+}
+
+render_aggregate_timer() {
+  printf '[Unit]\nDescription=TinyCloud status views every 5 minutes\n\n[Timer]\nOnBootSec=2min\nOnUnitActiveSec=5min\n\n[Install]\nWantedBy=timers.target\n'
+}
+
 render_env() {
   printf 'GATEWAY_HOST=%s\nRELAY_TOKEN=%s\n' "$HOST" "$1"
+}
+
+setup_aggregate() {
+  render_aggregate_service | put_file /etc/systemd/system/tinycloud-aggregate.service 644
+  render_aggregate_timer | put_file /etc/systemd/system/tinycloud-aggregate.timer 644
+  run systemctl daemon-reload
+  run systemctl enable --now tinycloud-aggregate.timer
 }
 
 install_packages() {
@@ -260,6 +275,7 @@ main() {
   setup_firewall
   install_stack
   configure_syncthing
+  setup_aggregate
   print_summary
 }
 

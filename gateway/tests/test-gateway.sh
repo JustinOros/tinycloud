@@ -106,4 +106,14 @@ assert_contains "lines saved host" "$saved" "GATEWAY_HOST=gw.example.com"
 assert_contains "lines saved discovery" "$saved" "DISCOVERY_ID=$(mkid C)"
 assert_eq "lines file private" 600 "$(stat -c %a "$GW_HOME/node-lines.txt" 2> /dev/null || stat -f %Lp "$GW_HOME/node-lines.txt")"
 
+assert_contains "aggregate service runs the command" "$(render_aggregate_service)" "ExecStart=/usr/local/bin/tinycloud-gw aggregate"
+assert_contains "aggregate service is oneshot" "$(render_aggregate_service)" "Type=oneshot"
+assert_contains "aggregate timer every 5 minutes" "$(render_aggregate_timer)" "OnUnitActiveSec=5min"
+assert_contains "aggregate timer installs" "$(render_aggregate_timer)" "WantedBy=timers.target"
+DRY_RUN=true
+agg=$(setup_aggregate)
+assert_contains "aggregate service file planned" "$agg" "write /etc/systemd/system/tinycloud-aggregate.service"
+assert_contains "aggregate timer file planned" "$agg" "write /etc/systemd/system/tinycloud-aggregate.timer"
+assert_contains "aggregate timer enabled" "$agg" "systemctl enable --now tinycloud-aggregate.timer"
+
 finish

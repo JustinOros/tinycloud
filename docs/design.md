@@ -9,9 +9,10 @@ A private file cloud for trusted friends. Nodes sync your shared files through a
 | Syncthing | every node and the gateway | syncs files |
 | Relay and discovery | gateway | lets nodes find and reach each other |
 | Agent | every node | small script, talks only to its own Syncthing |
-| Aggregator | gateway | builds status views (not built yet) |
+| Aggregator | gateway | `tinycloud-gw aggregate` builds the status views every 5 minutes |
 | `tinycloud` command | nodes | doctor, logs, debug, support, join, path, confirm, leave |
-| `tinycloud-gw` command | gateway | approve, remove, list, backup, restore |
+| `tinycloud-gw` command | gateway | approve, remove, list, config, aggregate, view, backup, restore |
+| `tinycloud-dashboard` | gateway owner's computer | opens the status page |
 
 The gateway never stores the library. Anchor nodes hold full copies.
 
@@ -162,7 +163,11 @@ Phase 5. Read-only. Lives in `apps/discord-bot/`. Each owner runs their own.
 
 ## Dashboard
 
-Planned: `tinycloud dashboard` on the gateway owner's computer fetches the full view over SSH and opens a page on localhost. Each friend sees only their own nodes. The page escapes all text.
+`tinycloud-dashboard USER@GATEWAY` runs on the gateway owner's computer. It fetches the full view over SSH (`tinycloud-gw view`), writes one self-contained HTML file, and opens it. Run it again to refresh. Each friend sees only their own nodes. The page escapes all text.
+
+The gateway builds the views every 5 minutes. For each approved node it reads that node's `status.json`, checks every field, and keeps only the known ones. Online or offline comes from Syncthing's connection list. The full view is `state/view.json`. Each owner's view is `view.json` in their `tc-view-OWNER` folder, which syncs to that owner's nodes.
+
+A node shows a warning when it is offline, low on space, has name conflicts, has no status yet, or has not reported in 36 hours.
 
 ## If the gateway goes down
 
@@ -196,6 +201,7 @@ Planned: `tinycloud dashboard` on the gateway owner's computer fetches the full 
 
 ## Still to verify
 
+- The aggregator and dashboard on the real gateway.
 - The firewall on a Pi, open only to the gateway.
 - Nodes on the same LAN do not try direct connections.
 - Min free space and pull order behave on a nearly full card.
@@ -208,6 +214,6 @@ Planned: `tinycloud dashboard` on the gateway owner's computer fetches the full 
 
 1. Node stack: Syncthing, agent, status page, firewall, doctor. Done.
 2. Docker node. Done.
-3. Gateway. Done. Aggregator: not yet.
+3. Gateway and aggregator. Done.
 4. Approval commands. Done.
 5. Test with rocky, grace, and Finn's Linode. Grace and a Docker node are done.

@@ -31,10 +31,22 @@ Check that the code it shows matches the one on the node, then type `yes`.
 | `tinycloud-gw remove NAME` | drops the node |
 | `tinycloud-gw list` | nodes and who is online |
 | `tinycloud-gw config` | the five lines every node needs |
+| `tinycloud-gw aggregate` | rebuilds the status views (a timer runs it every 5 minutes) |
+| `tinycloud-gw view` | prints the full status view as JSON |
 | `tinycloud-gw backup` | saves the gateway identity to `/root/tinycloud-backup/` |
 | `tinycloud-gw restore FILE` | puts a saved identity back |
 
 Every approve, remove, backup, and restore is logged in `/opt/tinycloud-gateway/audit.log`.
+
+## Dashboard
+
+On your own computer, with SSH access to the gateway and a copy of this repo:
+
+```
+sh dashboard/tinycloud-dashboard root@gw.example.com
+```
+
+It opens a page with every node: online or offline, space, warnings. Run it again to refresh.
 
 ## If the gateway dies
 

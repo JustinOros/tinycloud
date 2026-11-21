@@ -8,7 +8,7 @@ for t in "$HERE"/test-*.sh; do
 done
 
 if command -v shellcheck > /dev/null 2>&1; then
-  shellcheck -x -s sh "$ROOT"/*.sh "$ROOT"/../setup.sh "$ROOT"/../setup-node.sh "$ROOT"/bin/* "$HERE"/*.sh || failed=1
+  shellcheck -x -s sh "$ROOT"/*.sh "$ROOT"/../setup.sh "$ROOT"/../setup-node.sh "$ROOT"/../dashboard/tinycloud-dashboard "$ROOT"/bin/* "$HERE"/*.sh || failed=1
 else
   echo "shellcheck not installed, skipped"
 fi
