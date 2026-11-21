@@ -46,7 +46,7 @@ On your own computer, with SSH access to the gateway and a copy of this repo:
 sh dashboard/tinycloud-dashboard root@gw.example.com
 ```
 
-It opens a page with every node: online or offline, space, warnings. Run it again to refresh.
+It opens a page with every node: online or offline, space, warnings. Run it again to refresh, or add `--watch` to keep it updating every minute until you press Ctrl+C.
 
 ## If the gateway dies
 

@@ -15,12 +15,14 @@ cat > "$BIN/ssh" << 'EOT'
 #!/bin/sh
 printf 'ssh %s\n' "$*" >> "$FAKE_SSH_LOG"
 [ "${FAKE_SSH_FAIL:-0}" = 1 ] && exit 255
+[ -f "$FAKE_SSH_FAIL_FILE" ] && exit 255
 cat "$FAKE_VIEW"
 EOT
 chmod +x "$BIN/ssh"
 FAKE_SSH_LOG=$SANDBOX/ssh.log
 FAKE_VIEW=$VIEW_FILE
-export FAKE_SSH_LOG FAKE_VIEW
+FAKE_SSH_FAIL_FILE=$SANDBOX/ssh.fail
+export FAKE_SSH_LOG FAKE_VIEW FAKE_SSH_FAIL_FILE
 
 cat > "$VIEW_FILE" << 'EOT'
 {"version":1,"generated":"2026-11-21T20:00:00Z","nodes":[{"name":"adrian","role":"contributor","owner":"justin","online":true,"status":{"version":"0.1.0","percent_stored":100,"free_bytes":167600000000,"low_space":false,"case_conflicts":0,"reported":"2026-11-21T19:55:00Z"}},{"name":"grace","role":"contributor","owner":"justin","online":false,"status":null}]}
@@ -62,6 +64,36 @@ out=$(sh "$ROOT/dashboard/tinycloud-dashboard" --no-open 'bad host;rm' 2>&1)
 assert_contains "bad host refused" "$out" "not a valid host"
 out=$(sh "$ROOT/dashboard/tinycloud-dashboard" --bogus gw 2>&1)
 assert_contains "unknown flag" "$out" "usage:"
+
+page=$(cat "$OUT")
+assert_not_contains "no auto refresh by default" "$page" "http-equiv"
+
+cat > "$VIEW_FILE" << 'EOT'
+{"version":1,"generated":"x","nodes":[{"name":"first","role":"reader","owner":"a","online":true,"status":null}]}
+EOT
+WOUT=$SANDBOX/watch.html
+TC_DASHBOARD_INTERVAL=1 sh "$ROOT/dashboard/tinycloud-dashboard" --no-open --watch --out "$WOUT" gw.example.com > "$SANDBOX/watch.log" 2>&1 &
+watch_pid=$!
+sleep 1
+page=$(cat "$WOUT")
+assert_contains "watch page refreshes itself" "$page" '<meta http-equiv="refresh" content="1">'
+assert_contains "watch first fetch" "$page" '"name":"first"'
+cat > "$VIEW_FILE" << 'EOT'
+{"version":1,"generated":"x","nodes":[{"name":"second","role":"reader","owner":"a","online":true,"status":null}]}
+EOT
+sleep 3
+page=$(cat "$WOUT")
+assert_contains "watch picks up new data" "$page" '"name":"second"'
+touch "$FAKE_SSH_FAIL_FILE"
+printf 'not json\n' > "$VIEW_FILE"
+sleep 3
+page=$(cat "$WOUT")
+assert_contains "watch keeps last page on failure" "$page" '"name":"second"'
+assert_contains "watch reports refresh failure" "$(cat "$SANDBOX/watch.log")" "Could not refresh"
+rm -f "$FAKE_SSH_FAIL_FILE"
+kill "$watch_pid" 2> /dev/null
+wait "$watch_pid" 2> /dev/null
+assert_contains "watch says how to stop" "$(cat "$SANDBOX/watch.log")" "Ctrl+C"
 
 if command -v node > /dev/null 2>&1; then
   cat > "$VIEW_FILE" << 'EOT'
