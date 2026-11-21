@@ -393,7 +393,7 @@ install_files() {
   fi
   tar -C "$SRC/node" --exclude=./data --exclude=./tinycloud.conf --exclude=./tests -cf - . | tar -C "$NODE_HOME" -xf - || return 1
   mkdir -p "$NODE_HOME/data/library"
-  chown 1000:1000 "$NODE_HOME/data/library"
+  chown 1000:1000 "$NODE_HOME/data/library" 2> /dev/null || true
   chmod +x "$NODE_HOME/bin/tinycloud"
 }
 
