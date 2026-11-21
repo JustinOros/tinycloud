@@ -293,6 +293,37 @@ assert_contains "help lists aggregate" "$(usage)" "aggregate"
 assert_contains "help lists view" "$(usage)" "view"
 
 reset
+nowiso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+mkdir -p "$GW_STATE"
+cat > "$GW_STATE/view.json" << EOT
+{"version":1,"generated":"$nowiso","nodes":[
+{"name":"grace","role":"contributor","owner":"justin","online":false,"status":null},
+{"name":"adrian","role":"contributor","owner":"justin","online":true,"status":{"version":"0.1.0","percent_stored":100,"free_bytes":167600000000,"low_space":false,"case_conflicts":0,"reported":"$nowiso"}},
+{"name":"brie","role":"reader","owner":"finn","online":true,"status":{"version":"0.1.0","percent_stored":40,"free_bytes":12884901888,"low_space":true,"case_conflicts":2,"reported":"2020-01-01T00:00:00Z"}},
+{"name":"odd","role":"reader","owner":"zed","online":null,"status":null}]}
+EOT
+st=$(cmd_status)
+assert_contains "status summary" "$st" "TinyCloud: 4 nodes, 2 online, 3 with warnings. Updated just now."
+assert_contains "status header" "$st" "NODE"
+assert_contains "status shows free space" "$st" "156.1 GB"
+assert_contains "status shows exact gigabytes" "$st" "12.0 GB"
+assert_contains "status shows just now" "$st" "just now"
+assert_contains "status shows low space" "$st" "Low space"
+assert_contains "status shows conflicts" "$st" "2 name conflicts"
+assert_contains "status shows stale" "$st" "Stale status"
+assert_contains "status shows days ago" "$st" "days ago"
+assert_contains "status shows no status" "$st" "No status yet"
+assert_contains "status shows unknown" "$st" "Unknown"
+assert_eq "status has no color by default" 0 "$(printf '%s' "$st" | grep -c "$(printf '\033')")"
+assert_eq "status sorted by owner then name" "brie adrian grace odd" "$(printf '%s\n' "$st" | awk 'NR > 3 {printf "%s ", $1}' | sed 's/ $//')"
+stc=$(cmd_status --color)
+assert_eq "status color adds escapes" 1 "$([ "$(printf '%s' "$stc" | grep -c "$(printf '\033')")" -gt 0 ] && echo 1 || echo 0)"
+assert_eq "bad status flag fails" 1 "$(cmd_status --bogus > /dev/null 2>&1 && echo 0 || echo 1)"
+assert_contains "help lists status" "$(usage)" "status"
+printf '{"version":1,"generated":"%s","nodes":[]}\n' "$nowiso" > "$GW_STATE/view.json"
+assert_contains "status with no nodes" "$(cmd_status)" "No nodes yet."
+
+reset
 printf '{"connections":null}' > "$FAKE/connections.json"
 printf 'yes\n' | cmd_approve rocky "$N1" reader justin > /dev/null 2>&1
 cmd_aggregate

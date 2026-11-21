@@ -16,20 +16,28 @@ cat > "$BIN/ssh" << 'EOT'
 printf 'ssh %s\n' "$*" >> "$FAKE_SSH_LOG"
 [ "${FAKE_SSH_FAIL:-0}" = 1 ] && exit 255
 [ -f "$FAKE_SSH_FAIL_FILE" ] && exit 255
-cat "$FAKE_VIEW"
+case "$*" in
+  *"tinycloud-gw status"*)
+    [ -f "$FAKE_STATUS_RC" ] && exit "$(cat "$FAKE_STATUS_RC")"
+    cat "$FAKE_STATUS"
+    ;;
+  *) cat "$FAKE_VIEW" ;;
+esac
 EOT
 chmod +x "$BIN/ssh"
 FAKE_SSH_LOG=$SANDBOX/ssh.log
 FAKE_VIEW=$VIEW_FILE
 FAKE_SSH_FAIL_FILE=$SANDBOX/ssh.fail
-export FAKE_SSH_LOG FAKE_VIEW FAKE_SSH_FAIL_FILE
+FAKE_STATUS=$SANDBOX/status.txt
+FAKE_STATUS_RC=$SANDBOX/status.rc
+export FAKE_SSH_LOG FAKE_VIEW FAKE_SSH_FAIL_FILE FAKE_STATUS FAKE_STATUS_RC
 
 cat > "$VIEW_FILE" << 'EOT'
 {"version":1,"generated":"2026-11-21T20:00:00Z","nodes":[{"name":"adrian","role":"contributor","owner":"justin","online":true,"status":{"version":"0.1.0","percent_stored":100,"free_bytes":167600000000,"low_space":false,"case_conflicts":0,"reported":"2026-11-21T19:55:00Z"}},{"name":"grace","role":"contributor","owner":"justin","online":false,"status":null}]}
 EOT
 
 OUT=$SANDBOX/page.html
-out=$(sh "$ROOT/dashboard/tinycloud-dashboard" --no-open --out "$OUT" root@gw.example.com 2>&1)
+out=$(sh "$ROOT/dashboard/tinycloud-dashboard" --web --no-open --out "$OUT" root@gw.example.com 2>&1)
 assert_contains "writes the page" "$out" "Wrote $OUT"
 assert_eq "page exists" 1 "$([ -f "$OUT" ] && echo 1 || echo 0)"
 page=$(cat "$OUT")
@@ -41,7 +49,7 @@ assert_eq "page is private" 600 "$(stat -c %a "$OUT" 2> /dev/null || stat -f %Lp
 cat > "$VIEW_FILE" << 'EOT'
 {"version":1,"generated":"x","nodes":[{"name":"</script><script>alert(1)</script>","role":"reader","owner":"a","online":true,"status":null}]}
 EOT
-sh "$ROOT/dashboard/tinycloud-dashboard" --no-open --out "$OUT" gw.example.com > /dev/null 2>&1
+sh "$ROOT/dashboard/tinycloud-dashboard" --web --no-open --out "$OUT" gw.example.com > /dev/null 2>&1
 page=$(cat "$OUT")
 assert_not_contains "data cannot close the script tag" "$page" "</script><script>alert(1)"
 assert_contains "angle bracket escaped" "$page" 'u003c/script>'
@@ -49,18 +57,18 @@ assert_eq "only the page scripts exist" 2 "$(grep -c '^<script' "$OUT")"
 
 FAKE_SSH_FAIL=1
 export FAKE_SSH_FAIL
-out=$(sh "$ROOT/dashboard/tinycloud-dashboard" --no-open --out "$OUT" gw.example.com 2>&1)
+out=$(sh "$ROOT/dashboard/tinycloud-dashboard" --web --no-open --out "$OUT" gw.example.com 2>&1)
 assert_contains "ssh failure explained" "$out" "Could not read the view"
 FAKE_SSH_FAIL=0
 export FAKE_SSH_FAIL
 
 printf 'not json\n' > "$VIEW_FILE"
-out=$(sh "$ROOT/dashboard/tinycloud-dashboard" --no-open --out "$OUT" gw.example.com 2>&1)
+out=$(sh "$ROOT/dashboard/tinycloud-dashboard" --web --no-open --out "$OUT" gw.example.com 2>&1)
 assert_contains "bad reply refused" "$out" "did not return a status view"
 
-out=$(sh "$ROOT/dashboard/tinycloud-dashboard" --no-open 2>&1)
+out=$(sh "$ROOT/dashboard/tinycloud-dashboard" --web --no-open 2>&1)
 assert_contains "host needed" "$out" "usage:"
-out=$(sh "$ROOT/dashboard/tinycloud-dashboard" --no-open 'bad host;rm' 2>&1)
+out=$(sh "$ROOT/dashboard/tinycloud-dashboard" --web --no-open 'bad host;rm' 2>&1)
 assert_contains "bad host refused" "$out" "not a valid host"
 out=$(sh "$ROOT/dashboard/tinycloud-dashboard" --bogus gw 2>&1)
 assert_contains "unknown flag" "$out" "usage:"
@@ -72,7 +80,7 @@ cat > "$VIEW_FILE" << 'EOT'
 {"version":1,"generated":"x","nodes":[{"name":"first","role":"reader","owner":"a","online":true,"status":null}]}
 EOT
 WOUT=$SANDBOX/watch.html
-TC_DASHBOARD_INTERVAL=1 sh "$ROOT/dashboard/tinycloud-dashboard" --no-open --watch --out "$WOUT" gw.example.com > "$SANDBOX/watch.log" 2>&1 &
+TC_DASHBOARD_INTERVAL=1 sh "$ROOT/dashboard/tinycloud-dashboard" --web --no-open --watch --out "$WOUT" gw.example.com > "$SANDBOX/watch.log" 2>&1 &
 watch_pid=$!
 sleep 1
 page=$(cat "$WOUT")
@@ -95,11 +103,44 @@ kill "$watch_pid" 2> /dev/null
 wait "$watch_pid" 2> /dev/null
 assert_contains "watch says how to stop" "$(cat "$SANDBOX/watch.log")" "Ctrl+C"
 
+printf 'TinyCloud: 1 node, 1 online, 0 with warnings. Updated just now.\n\nNODE\nfirst\n' > "$FAKE_STATUS"
+: > "$FAKE_SSH_LOG"
+out=$(sh "$ROOT/dashboard/tinycloud-dashboard" gw.example.com 2>&1)
+assert_contains "text is the default" "$out" "TinyCloud: 1 node, 1 online"
+assert_contains "text asks the gateway for status" "$(cat "$FAKE_SSH_LOG")" "gw.example.com tinycloud-gw status"
+assert_not_contains "text mode writes no page" "$out" "Wrote"
+assert_not_contains "no color when not a terminal" "$(cat "$FAKE_SSH_LOG")" "--color"
+
+echo 255 > "$FAKE_STATUS_RC"
+out=$(sh "$ROOT/dashboard/tinycloud-dashboard" gw.example.com 2>&1)
+assert_contains "text ssh failure explained" "$out" "Could not read the status"
+echo 1 > "$FAKE_STATUS_RC"
+out=$(sh "$ROOT/dashboard/tinycloud-dashboard" gw.example.com 2>&1)
+assert_contains "old gateway explained" "$out" "up to date"
+rm -f "$FAKE_STATUS_RC"
+
+TC_DASHBOARD_INTERVAL=1 sh "$ROOT/dashboard/tinycloud-dashboard" --watch gw.example.com > "$SANDBOX/tw.log" 2>&1 &
+tw_pid=$!
+sleep 1
+printf 'TinyCloud: 1 node, 1 online, 0 with warnings. Updated just now.\n\nNODE\nchanged\n' > "$FAKE_STATUS"
+sleep 3
+echo 255 > "$FAKE_STATUS_RC"
+sleep 2
+kill "$tw_pid" 2> /dev/null
+wait "$tw_pid" 2> /dev/null
+rm -f "$FAKE_STATUS_RC"
+tw=$(cat "$SANDBOX/tw.log")
+assert_contains "text watch shows first data" "$tw" "first"
+assert_contains "text watch picks up new data" "$tw" "changed"
+assert_contains "text watch clears the screen" "$tw" "$(printf '\033[H\033[2J')"
+assert_contains "text watch says how to stop" "$tw" "Ctrl+C"
+assert_contains "text watch survives failures" "$tw" "Could not refresh"
+
 if command -v node > /dev/null 2>&1; then
   cat > "$VIEW_FILE" << 'EOT'
 {"version":1,"generated":"2026-11-21T20:00:00Z","nodes":[{"name":"adrian","role":"contributor","owner":"justin","online":true,"status":{"version":"0.1.0","percent_stored":100,"free_bytes":167600000000,"low_space":true,"case_conflicts":2,"reported":"2026-11-21T19:55:00Z"}},{"name":"grace","role":"contributor","owner":"justin","online":false,"status":null},{"name":"x","role":"reader","owner":"finn","online":null,"status":null}]}
 EOT
-  sh "$ROOT/dashboard/tinycloud-dashboard" --no-open --out "$OUT" gw.example.com > /dev/null 2>&1
+  sh "$ROOT/dashboard/tinycloud-dashboard" --web --no-open --out "$OUT" gw.example.com > /dev/null 2>&1
   cat > "$SANDBOX/run.js" << 'EOT'
 const fs = require('fs');
 const html = fs.readFileSync(process.argv[2], 'utf8');

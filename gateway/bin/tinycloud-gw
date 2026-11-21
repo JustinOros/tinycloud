@@ -21,6 +21,7 @@ usage: tinycloud-gw COMMAND
   config                                     show the lines every node needs
   aggregate                                  rebuild the status views
   view                                       print the full status view as JSON
+  status [--color]                           print a table of nodes and their status
   backup                                     save the gateway identity
   restore FILE [--yes]                       restore a saved identity
   version
@@ -351,6 +352,93 @@ cmd_view() {
   cat "$GW_STATE/view.json"
 }
 
+STATUS_JQ='
+  def age: if . < 0 then "-" elif . < 60 then "just now" elif . < 3600 then "\((. / 60 | floor)) min ago" elif . < 172800 then "\((. / 3600 | floor)) hr ago" else "\((. / 86400 | floor)) days ago" end;
+  def warnings:
+    [ (if .online == false then "Offline" else empty end),
+      (if .status == null then "No status yet"
+       else
+         (if .status.low_space then "Low space" else empty end),
+         (if .status.case_conflicts > 0 then "\(.status.case_conflicts) name conflict" + (if .status.case_conflicts == 1 then "" else "s" end) else empty end),
+         (if (now - (.status.reported | fromdateiso8601)) > 129600 then "Stale status" else empty end)
+       end) ] | join(", ");
+  .nodes | sort_by([.owner, .name])[]
+  | [ .name, .owner, .role,
+      (if .online == true then "Online" elif .online == false then "Offline" else "Unknown" end),
+      (if .status == null then "-" else "\(.status.percent_stored)%" end),
+      (if .status == null then "-" else (.status.free_bytes | tostring) end),
+      (.status.version // "-"),
+      (if .status == null then "-" else ((now - (.status.reported | fromdateiso8601)) | floor | age) end),
+      warnings ]
+  | @tsv'
+
+render_status() {
+  rs_view=$1
+  rs_color=$2
+  rs_gen=$(printf '%s' "$rs_view" | jq -r '(now - (.generated | fromdateiso8601)) | floor' 2> /dev/null) || return 1
+  printf '%s' "$rs_view" | jq -r "$STATUS_JQ" | awk -F '\t' -v gen="$rs_gen" -v color="$rs_color" '
+    function age(s) {
+      if (s < 60) return "just now"
+      if (s < 3600) return int(s / 60) " min ago"
+      if (s < 172800) return int(s / 3600) " hr ago"
+      return int(s / 86400) " days ago"
+    }
+    function paint(line,   e) {
+      if (color != "1") return line
+      e = sprintf("%c", 27)
+      gsub(/Online/, e "[32m&" e "[0m", line)
+      gsub(/Offline/, e "[31m&" e "[0m", line)
+      gsub(/Low space/, e "[31m&" e "[0m", line)
+      gsub(/No status yet|Stale status|[0-9]+ name conflicts?/, e "[33m&" e "[0m", line)
+      return line
+    }
+    BEGIN {
+      split("NODE OWNER ROLE STATE STORED FREE VERSION CHANGED WARNINGS", head, " ")
+      for (i = 1; i <= 9; i++) w[i] = length(head[i])
+    }
+    {
+      n++
+      if ($6 != "-") $6 = sprintf("%.1f GB", $6 / 1073741824)
+      for (i = 1; i <= 9; i++) {
+        row[n, i] = $i
+        if (length($i) > w[i]) w[i] = length($i)
+      }
+      if ($4 == "Online") up++
+      if ($9 != "") warn++
+    }
+    END {
+      if (n == 0) {
+        print "No nodes yet."
+        exit
+      }
+      printf "TinyCloud: %d node%s, %d online, %d with warnings. Updated %s.\n\n", n, (n == 1 ? "" : "s"), up, warn, age(gen)
+      line = ""
+      for (i = 1; i <= 9; i++) line = line sprintf("%-" w[i] "s  ", head[i])
+      sub(/ +$/, "", line)
+      print line
+      for (r = 1; r <= n; r++) {
+        line = ""
+        for (i = 1; i <= 9; i++) line = line sprintf("%-" w[i] "s  ", row[r, i])
+        sub(/ +$/, "", line)
+        print paint(line)
+      }
+    }'
+}
+
+cmd_status() {
+  cs_color=0
+  case ${1:-} in
+    --color) cs_color=1 ;;
+    '') ;;
+    *)
+      usage
+      return 1
+      ;;
+  esac
+  cs_view=$(cmd_view) || return 1
+  render_status "$cs_view" "$cs_color"
+}
+
 cmd_config() {
   if [ ! -r "$GW_HOME/node-lines.txt" ]; then
     log ERROR "no saved node settings found, run gateway.sh first"
@@ -447,6 +535,7 @@ main() {
     config) cmd_config ;;
     aggregate) cmd_aggregate ;;
     view) cmd_view ;;
+    status) cmd_status "$@" ;;
     backup) cmd_backup ;;
     restore) cmd_restore "$@" ;;
     version) echo "$GW_VERSION" ;;

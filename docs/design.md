@@ -12,7 +12,7 @@ A private file cloud for trusted friends. Nodes sync your shared files through a
 | Aggregator | gateway | `tinycloud-gw aggregate` builds the status views every 5 minutes |
 | `tinycloud` command | nodes | doctor, logs, debug, support, join, path, confirm, leave |
 | `tinycloud-gw` command | gateway | approve, remove, list, config, aggregate, view, backup, restore |
-| `tinycloud-dashboard` | gateway owner's computer | opens the status page |
+| `tinycloud-dashboard` | gateway owner's computer | shows the status table, or a page with `--web` |
 
 The gateway never stores the library. Anchor nodes hold full copies.
 
@@ -163,7 +163,7 @@ Phase 5. Read-only. Lives in `apps/discord-bot/`. Each owner runs their own.
 
 ## Dashboard
 
-`tinycloud-dashboard USER@GATEWAY` runs on the gateway owner's computer. It fetches the full view over SSH (`tinycloud-gw view`), writes one self-contained HTML file, and opens it. Run it again to refresh. Each friend sees only their own nodes. The page escapes all text.
+`tinycloud-dashboard USER@GATEWAY` runs on the gateway owner's computer. It prints a table made by `tinycloud-gw status` over SSH. With `--watch` it redraws every minute. With `--web` it fetches the full view (`tinycloud-gw view`), writes one self-contained HTML file, and opens it. Each friend sees only their own nodes. The page escapes all text.
 
 The gateway builds the views every 5 minutes. For each approved node it reads that node's `status.json`, checks every field, and keeps only the known ones. Online or offline comes from Syncthing's connection list. The full view is `state/view.json`. Each owner's view is `view.json` in their `tc-view-OWNER` folder, which syncs to that owner's nodes.
 

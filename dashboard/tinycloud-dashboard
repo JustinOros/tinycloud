@@ -5,11 +5,12 @@ OUT=${TC_DASHBOARD_OUT:-${TMPDIR:-/tmp}/tinycloud-dashboard.html}
 HOST=${TC_DASHBOARD_HOST:-}
 OPEN=true
 WATCH=false
+WEB=false
 VIEW=
 INTERVAL=${TC_DASHBOARD_INTERVAL:-60}
 
 usage() {
-  echo "usage: tinycloud-dashboard [--no-open] [--watch] [--out FILE] [USER@]GATEWAY"
+  echo "usage: tinycloud-dashboard [--watch] [--web [--no-open] [--out FILE]] [USER@]GATEWAY"
 }
 
 parse_args() {
@@ -17,6 +18,10 @@ parse_args() {
     case $1 in
       --no-open)
         OPEN=false
+        shift
+        ;;
+      --web)
+        WEB=true
         shift
         ;;
       --watch)
@@ -243,8 +248,71 @@ watch_loop() {
   done
 }
 
+fetch_text() {
+  if [ -t 1 ]; then
+    ssh -o ConnectTimeout=10 "$HOST" tinycloud-gw status --color
+  else
+    ssh -o ConnectTimeout=10 "$HOST" tinycloud-gw status
+  fi
+}
+
+load_text() {
+  TEXT=$(fetch_text)
+  lt_rc=$?
+  if [ "$lt_rc" -eq 255 ]; then
+    return 1
+  fi
+  [ "$lt_rc" -eq 0 ] || return 2
+  return 0
+}
+
+explain_failure() {
+  case $1 in
+    1) echo "Could not read the status from $HOST. Check that you can ssh to it." >&2 ;;
+    *) echo "The gateway did not return a status. Is tinycloud-gw up to date there?" >&2 ;;
+  esac
+}
+
+show_text() {
+  if [ "$WATCH" = true ]; then
+    printf '\033[H\033[2J'
+  fi
+  printf '%s\n' "$TEXT"
+  if [ "$WATCH" = true ]; then
+    printf '\nRefreshing every %s seconds. Press Ctrl+C to stop.\n' "$INTERVAL"
+  fi
+}
+
+text_loop() {
+  while true; do
+    sleep "$INTERVAL"
+    if load_text; then
+      show_text
+    else
+      echo "Could not refresh, will try again." >&2
+    fi
+  done
+}
+
+main_text() {
+  load_text
+  mt_rc=$?
+  if [ "$mt_rc" -ne 0 ]; then
+    explain_failure "$mt_rc"
+    return 1
+  fi
+  show_text
+  if [ "$WATCH" = true ]; then
+    text_loop
+  fi
+}
+
 main() {
   parse_args "$@" || return 1
+  if [ "$WEB" != true ]; then
+    main_text
+    return $?
+  fi
   load_view
   case $? in
     0) ;;
