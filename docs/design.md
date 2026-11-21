@@ -1,6 +1,6 @@
 # TinyCloud design
 
-A private file cloud for trusted friends. Nodes sync one library through one small gateway. Nobody controls anyone else's node.
+A private file cloud for trusted friends. Nodes sync your shared files through a gateway. More gateways can be added later. Nobody controls anyone else's node.
 
 ## Parts
 
