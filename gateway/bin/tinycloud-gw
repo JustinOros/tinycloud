@@ -26,7 +26,7 @@ EOT
 }
 
 audit() {
-  au_line="$(date -u +%Y-%m-%dT%H:%M:%SZ) $(printf '%s' "$*" | tr -c '[:print:]' '?')"
+  au_line="$(date -u +%Y-%m-%dT%H:%M:%SZ) $(printf '%s' "$*" | LC_ALL=C tr -c ' -~' '?')"
   mkdir -p "$GW_HOME"
   if [ -f "$AUDIT" ] && [ "$(wc -c < "$AUDIT")" -gt 1048576 ]; then
     mv "$AUDIT" "$AUDIT.1"

@@ -23,7 +23,7 @@ log_to_file() {
 log() {
   log_level=$1
   shift
-  log_msg=$(printf '%s' "$*" | tr -c '[:print:]' '?')
+  log_msg=$(printf '%s' "$*" | LC_ALL=C tr -c ' -~' '?')
   log_line="$(date -u +%Y-%m-%dT%H:%M:%SZ) tinycloud-agent $TC_VERSION $log_level $log_msg"
   printf '%s\n' "$log_line"
   case $log_level in

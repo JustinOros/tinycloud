@@ -4,7 +4,7 @@
 own_id() {
   oi_id=$(read_state device-id)
   if ! valid_device_id "$oi_id"; then
-    oi_id=$(st_api GET /rest/system/status 2> /dev/null | jq -r '.myID // empty')
+    oi_id=$(st_api GET /rest/system/status 2> /dev/null | jq -r '.myID // empty' 2> /dev/null)
   fi
   printf '%s' "$oi_id"
 }

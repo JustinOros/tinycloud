@@ -6,7 +6,7 @@ GW_ST_CONFIG=${GW_ST_CONFIG:-$GW_HOME/data/syncthing/config/config.xml}
 log() {
   log_level=$1
   shift
-  log_msg=$(printf '%s' "$*" | tr -c '[:print:]' '?')
+  log_msg=$(printf '%s' "$*" | LC_ALL=C tr -c ' -~' '?')
   printf '%s tinycloud-gateway %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$log_level" "$log_msg"
 }
 
