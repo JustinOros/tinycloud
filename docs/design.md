@@ -10,7 +10,8 @@ A private file cloud for trusted friends. Nodes sync one library through one sma
 | Relay and discovery | gateway | lets nodes find and reach each other |
 | Agent | every node | small script, talks only to its own Syncthing |
 | Aggregator | gateway | builds status views |
-| `tinycloud` command | gateway and nodes | approve, remove, doctor, logs, dashboard |
+| `tinycloud` command | nodes | doctor, logs, debug, support, confirm, leave |
+| `tinycloud-gw` command | gateway | approve, remove, list, backup, restore |
 
 The gateway never stores the library. Anchor nodes hold full copies.
 
@@ -47,9 +48,9 @@ Nobody ever auto-accepts a folder or a device. The introducer feature is never u
 
 1. The node makes its own ID on first boot and shows it on a local page with a short code and QR. The code is the first 6 characters of the SHA-256 of the device ID.
 2. The person sends the owner one line: `NAME DEVICEID ROLE OWNER`.
-3. The owner runs `tinycloud approve "<line>"`. It prints the code to compare with the person.
+3. The owner runs `tinycloud-gw approve NAME DEVICEID ROLE OWNER` on the gateway. It prints the code to compare with the person.
 4. Every node picks up the new peer on its next check. Nothing to accept.
-5. `tinycloud remove NAME` undoes it. `tinycloud leave` on a node leaves.
+5. `tinycloud-gw remove NAME` undoes it. `tinycloud leave` on a node leaves.
 
 ## peers.json
 
