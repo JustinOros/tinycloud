@@ -4,7 +4,7 @@ services:
     user: "0:0"
     command: >
       sh -c "mkdir -p /data/system/peers /data/system/status-out /data/system/view &&
-      chown -R 1000:1000 /data/system /state /logs /web"
+      chown -R 1000:1000 /data/system /state /logs /web /syncthing-config"
     cap_drop: [ALL]
     cap_add: [CHOWN, DAC_OVERRIDE]
     security_opt: ["no-new-privileges:true"]
@@ -13,6 +13,7 @@ services:
       - state:/state
       - logs:/logs
       - web:/web
+      - syncthing-config:/syncthing-config
 
   syncthing:
     image: syncthing/syncthing:1.29
