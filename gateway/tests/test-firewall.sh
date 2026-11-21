@@ -23,4 +23,9 @@ if command -v nft > /dev/null 2>&1; then
   assert_eq "nft accepts rules" ok "$result"
 fi
 
+compose=$(cat "$GW/docker-compose.yml")
+assert_contains "discovery flags use double dashes" "$compose" "--listen=:8443"
+assert_contains "discovery cert flag" "$compose" "--cert=/disco/cert.pem"
+assert_not_contains "no single dash discovery flags" "$compose" "- -listen=:8443"
+
 finish

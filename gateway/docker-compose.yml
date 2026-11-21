@@ -46,10 +46,10 @@ services:
     user: "1000:1000"
     restart: unless-stopped
     command:
-      - -listen=:8443
-      - -db-dir=/disco/db
-      - -cert=/disco/cert.pem
-      - -key=/disco/key.pem
+      - --listen=:8443
+      - --db-dir=/disco/db
+      - --cert=/disco/cert.pem
+      - --key=/disco/key.pem
     volumes:
       - ./data/disco:/disco
     read_only: true
