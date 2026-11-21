@@ -76,6 +76,14 @@ read_state() {
   cat "$(state_file "$1")" 2>/dev/null || true
 }
 
+sha256() {
+  if command -v sha256sum > /dev/null 2>&1; then
+    sha256sum "$1" | cut -d ' ' -f 1
+  else
+    shasum -a 256 "$1" | cut -d ' ' -f 1
+  fi
+}
+
 write_atomic() {
   printf '%s\n' "$2" > "$1.tmp" && mv "$1.tmp" "$1"
 }

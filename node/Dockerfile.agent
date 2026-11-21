@@ -1,0 +1,12 @@
+FROM alpine:3.20
+
+RUN apk add --no-cache curl jq netcat-openbsd \
+ && adduser -D -u 1000 tinycloud \
+ && mkdir -p /app /state /logs \
+ && chown tinycloud /state /logs
+
+COPY agent /app/agent
+COPY VERSION /app/VERSION
+
+USER tinycloud
+ENTRYPOINT ["sh", "/app/agent/loop.sh"]

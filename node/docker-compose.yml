@@ -1,0 +1,64 @@
+services:
+  init:
+    image: alpine:3.20
+    user: "0:0"
+    command: >
+      sh -c "mkdir -p /data/system/peers /data/system/status-out /data/system/view &&
+      chown -R 1000:1000 /data/system /state /logs"
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - system:/data/system
+      - state:/state
+      - logs:/logs
+
+  syncthing:
+    image: syncthing/syncthing:1.29
+    user: "1000:1000"
+    environment:
+      STGUIADDRESS: 0.0.0.0:8384
+      STNOUPGRADE: "1"
+    volumes:
+      - ./data/library:/data/library
+      - system:/data/system
+      - syncthing-config:/var/syncthing/config
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    user: "1000:1000"
+    environment:
+      TC_ST_URL: http://syncthing:8384
+    volumes:
+      - ./tinycloud.conf:/config/tinycloud.conf:ro
+      - syncthing-config:/syncthing-config:ro
+      - ./data/library:/data/library:ro
+      - system:/data/system
+      - state:/state
+      - logs:/logs
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    depends_on:
+      syncthing:
+        condition: service_started
+      init:
+        condition: service_completed_successfully
+
+volumes:
+  system:
+  state:
+  logs:
+  syncthing-config:

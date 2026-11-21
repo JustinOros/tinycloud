@@ -43,6 +43,12 @@ finish() {
   [ "$TESTS_FAILED" -eq 0 ]
 }
 
+conf_set() {
+  grep -v "^$2=" "$1" > "$1.new"
+  printf '%s=%s\n' "$2" "$3" >> "$1.new"
+  mv "$1.new" "$1"
+}
+
 mkid() {
   mk_g="$1$1$1$1$1$1$1"
   printf '%s-%s-%s-%s-%s-%s-%s-%s' "$mk_g" "$mk_g" "$mk_g" "$mk_g" "$mk_g" "$mk_g" "$mk_g" "$mk_g"
@@ -59,6 +65,8 @@ new_sandbox() {
   FAKE_DIR=$SANDBOX/fake
   mkdir -p "$TC_STATE_DIR" "$TC_LOG_DIR" "$TC_LIBRARY_DIR" "$TC_SYSTEM_DIR/peers" "$FAKE_DIR"
   : > "$FAKE_DIR/calls"
+  printf '{"state":"idle","globalBytes":1000,"localBytes":500,"pullErrors":0}' > "$FAKE_DIR/dbstatus.json"
+  printf '{"connections":{}}' > "$FAKE_DIR/connections.json"
   FAKE_FAIL=
   FAKE_RESTART=false
   PEERS_FILE=$TC_SYSTEM_DIR/peers/peers.json
@@ -82,6 +90,8 @@ fake_st_api() {
       printf '{"deviceID":"","name":"","addresses":["dynamic"],"compression":"metadata","introducer":false,"autoAcceptFolders":false,"paused":false,"untrusted":false}'
       ;;
     "GET /rest/config/folders/tinycloud-library") cat "$FAKE_DIR/library.json" ;;
+    "GET /rest/db/status?folder=tinycloud-library") cat "$FAKE_DIR/dbstatus.json" ;;
+    "GET /rest/system/connections") cat "$FAKE_DIR/connections.json" ;;
   esac
   return 0
 }

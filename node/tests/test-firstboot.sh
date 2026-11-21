@@ -86,30 +86,30 @@ run_main
 assert_eq "restart when required" 1 "$(count_calls 'POST /rest/system/restart')"
 
 setup anchor
-sed -i 's/^NODE_NAME=.*/NODE_NAME=Rocky/' "$TC_CONF"
+conf_set "$TC_CONF" NODE_NAME Rocky
 run_main
 assert_eq "bad node name fails" 1 "$RC"
 assert_eq "bad config touches nothing" 0 "$(count_calls PATCH)"
 assert_contains "error names the key" "$OUT" "NODE_NAME"
 
 setup anchor
-sed -i 's/^GATEWAY_HOST=.*/GATEWAY_HOST=gw.example.com\/evil/' "$TC_CONF"
+conf_set "$TC_CONF" GATEWAY_HOST gw.example.com/evil
 run_main
 assert_eq "bad host fails" 1 "$RC"
 
 setup anchor
-sed -i 's/^RELAY_TOKEN=.*/RELAY_TOKEN=a\&b/' "$TC_CONF"
+conf_set "$TC_CONF" RELAY_TOKEN 'a&b'
 run_main
 assert_eq "bad token fails" 1 "$RC"
 assert_not_contains "bad token not logged" "$OUT" 'a&b'
 
 setup anchor
-sed -i 's/^PULL_ORDER=.*/PULL_ORDER=chaos/' "$TC_CONF"
+conf_set "$TC_CONF" PULL_ORDER chaos
 run_main
 assert_eq "bad pull order fails" 1 "$RC"
 
 setup anchor
-sed -i "s/^GATEWAY_ID=.*/GATEWAY_ID=$ME/" "$TC_CONF"
+conf_set "$TC_CONF" GATEWAY_ID "$ME"
 run_main
 assert_eq "gateway id equal to self fails" 1 "$RC"
 

@@ -106,7 +106,7 @@ main() {
     return 0
   fi
   mkdir -p "$TC_STATE_DIR"
-  sha=$(sha256sum "$PEERS_FILE" | cut -d ' ' -f 1)
+  sha=$(sha256 "$PEERS_FILE")
   if [ "$sha" = "$(read_state applied.sha)" ]; then
     return 0
   fi

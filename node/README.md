@@ -7,6 +7,13 @@ Scripts that run inside the agent container.
 | `agent/lib.sh` | shared helpers: logging, checks, Syncthing API |
 | `agent/firstboot.sh` | one time setup from `tinycloud.conf` |
 | `agent/apply-peers.sh` | reads `peers.json`, adds or removes peers |
+| `agent/status.sh` | builds `status.json`, writes it only when it changed |
+| `agent/agent.sh` | one agent run: first boot, peers, status |
+| `agent/loop.sh` | runs the agent every 5 minutes, exits on failure |
+| `agent/doctor.sh` | plain English health checks |
+| `firewall/` | nftables rules and the script that loads them |
+| `docker-compose.yml` | Syncthing and the agent, no published ports |
+| `tinycloud.conf.example` | all config keys |
 | `tests/run.sh` | runs all tests and shellcheck |
 
 ## Test

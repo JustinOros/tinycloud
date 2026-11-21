@@ -40,6 +40,8 @@ Nobody ever auto-accepts a folder or a device. The introducer feature is never u
 - Local discovery, NAT, and public relays are off.
 - The relay needs a token, so only our nodes can use it.
 - Syncthing's web page and API are never exposed.
+- Pi hosts run an nftables firewall: default deny, outbound only to the gateway, DNS, and NTP. IPv6 is blocked in v1.
+- LAN-only inbound: the status page (port 80), plus SSH and SMB only if the owner turns them on.
 
 ## Joining
 
@@ -69,7 +71,8 @@ Optional: `PEERS_CONFIRM=manual` makes the node's owner confirm each new peer fi
 ## Status
 
 - Each node reports a tiny `status.json`: role, version, percent stored, free space, low space, case conflicts.
-- It is written only on a real change, or once a day.
+- It is written only when percent stored moves 2 points or more, low space flips, the version or role changes, case conflicts change, or once a day.
+- Low space means free space is under 1.5 times the free space floor.
 - Online or offline comes from the gateway, not from this file.
 - The gateway keeps only known fields and checks them.
 - Everyone sees only their own nodes. The gateway owner sees all.
