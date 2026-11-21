@@ -27,7 +27,7 @@ The gateway never stores the library. Anchor nodes hold full copies.
 
 | Folder | Direction | Holds |
 |---|---|---|
-| `tinycloud-library` | between nodes | the ebooks |
+| `tinycloud-library` | between nodes | your shared files |
 | `tinycloud-peers` | gateway to nodes | `peers.json` |
 | `tc-status-NAME` | node to gateway | that node's status |
 | `tc-view-OWNER` | gateway to that owner's nodes | what that owner may see |
@@ -157,7 +157,7 @@ Phase 5. Read-only. Lives in `apps/discord-bot/`. Each owner runs their own.
 
 ## Dashboard
 
-`tinycloud dashboard` on the gateway owner's Mac fetches the full view over SSH and opens a page on localhost. Each friend sees only their own nodes. The page escapes all text.
+`tinycloud dashboard` on the gateway owner's computer fetches the full view over SSH and opens a page on localhost. Each friend sees only their own nodes. The page escapes all text.
 
 ## If the gateway goes down
 
