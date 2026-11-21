@@ -324,6 +324,17 @@ printf '{"version":1,"generated":"%s","nodes":[]}\n' "$nowiso" > "$GW_STATE/view
 assert_contains "status with no nodes" "$(cmd_status)" "No nodes yet."
 
 reset
+printf 'yes\n' | cmd_approve rocky "$N1" reader justin > /dev/null 2>&1
+cmd_aggregate
+jq -c '.generated = "2020-01-01T00:00:00Z"' "$GW_STATE/view.json" > "$GW_STATE/view.tmp" && mv "$GW_STATE/view.tmp" "$GW_STATE/view.json"
+cmd_aggregate
+assert_contains "aggregate records its run time" "$(cat "$GW_STATE/aggregated.at")" "$(date +%s | cut -c1-6)"
+assert_eq "view generated follows the last run" true "$(cmd_view | jq -r '.generated | startswith("2020") | not')"
+assert_contains "status says just now after a run" "$(cmd_status)" "Updated just now."
+rm -f "$GW_STATE/aggregated.at"
+assert_contains "view falls back to stored time" "$(cmd_view)" '"generated":"2020-01-01T00:00:00Z"'
+
+reset
 printf '{"connections":null}' > "$FAKE/connections.json"
 printf 'yes\n' | cmd_approve rocky "$N1" reader justin > /dev/null 2>&1
 cmd_aggregate

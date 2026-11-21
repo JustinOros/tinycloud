@@ -329,6 +329,7 @@ do_aggregate() {
   ag_full=$(jq -nc --arg g "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson n "$ag_nodes" '{version: 1, generated: $g, nodes: $n}')
   mkdir -p "$GW_STATE"
   write_view "$GW_STATE/view.json" "$ag_full"
+  date +%s > "$GW_STATE/aggregated.at"
   for ag_owner in $(printf '%s' "$ag_nodes" | jq -r '[.[].owner] | unique | .[]'); do
     ag_dir=$(folder_dir "tc-view-$ag_owner")
     if [ -d "$ag_dir" ]; then
@@ -349,7 +350,11 @@ cmd_view() {
   if [ ! -s "$GW_STATE/view.json" ]; then
     cmd_aggregate || return 1
   fi
-  cat "$GW_STATE/view.json"
+  cv_at=$(cat "$GW_STATE/aggregated.at" 2> /dev/null)
+  case $cv_at in
+    '' | *[!0-9]*) cat "$GW_STATE/view.json" ;;
+    *) jq -c --argjson t "$cv_at" '.generated = ($t | todate)' "$GW_STATE/view.json" ;;
+  esac
 }
 
 STATUS_JQ='
