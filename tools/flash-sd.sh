@@ -420,18 +420,23 @@ after_write() {
 }
 
 pick_disk() {
-  pd_list=$(list_disks)
-  if [ -z "$pd_list" ]; then
-    fail "no removable disks found. Put the SD card in the reader and run this again."
-    return 1
-  fi
-  if [ -n "$DISK" ]; then
-    pd_line=$(printf '%s\n' "$pd_list" | awk -F '|' -v d="$DISK" '$1 == d')
-    if [ -z "$pd_line" ]; then
-      fail "$DISK is not a removable disk. Refusing."
-      return 1
+  while :; do
+    pd_list=$(list_disks)
+    if [ -n "$DISK" ]; then
+      [ -n "$pd_list" ] && pd_line=$(printf '%s\n' "$pd_list" | awk -F '|' -v d="$DISK" '$1 == d')
+      if [ -z "${pd_line:-}" ]; then
+        fail "$DISK is not a removable disk. Refusing."
+        return 1
+      fi
+      break
     fi
-  else
+    if [ -z "$pd_list" ]; then
+      say "No removable disks found."
+      printf 'Put the SD card in the reader, then press Enter to rescan (q to quit): '
+      read -r pd_again || return 1
+      [ "$pd_again" = q ] && return 1
+      continue
+    fi
     say "Removable disks:"
     pd_n=0
     while IFS='|' read -r pd_id pd_bytes pd_name; do
@@ -445,21 +450,26 @@ pick_disk() {
 $pd_list
 EOT
     if [ "$pd_n" -eq 1 ]; then
-      printf 'Which one is the SD card? [1]: '
+      printf 'Which one is the SD card? [1], r to rescan, q to quit: '
     else
-      printf 'Which one is the SD card? (number): '
+      printf 'Which one is the SD card? (number), r to rescan, q to quit: '
     fi
     read -r pd_choice || return 1
+    case $pd_choice in
+      r | R) continue ;;
+      q | Q) return 1 ;;
+    esac
     if [ -z "$pd_choice" ] && [ "$pd_n" -eq 1 ]; then
       pd_choice=1
     fi
     if ! printf '%s' "$pd_choice" | grep -Eq '^[0-9]+$' || [ "$pd_choice" -lt 1 ] || [ "$pd_choice" -gt "$pd_n" ]; then
-      fail "that is not one of the choices"
-      return 1
+      say "That is not one of the choices."
+      continue
     fi
     pd_line=$(printf '%s\n' "$pd_list" | sed -n "${pd_choice}p")
     DISK=${pd_line%%|*}
-  fi
+    break
+  done
   DISK_BYTES=$(printf '%s' "$pd_line" | cut -d '|' -f 2)
   DISK_NAME=$(printf '%s' "$pd_line" | cut -d '|' -f 3)
 }

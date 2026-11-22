@@ -38,7 +38,7 @@ reset_state() {
 }
 
 run_flash() {
-  main "$@" > "$SANDBOX/out" 2>&1
+  main "$@" < /dev/null > "$SANDBOX/out" 2>&1
   RC=$?
   OUT=$(cat "$SANDBOX/out")
 }
@@ -95,6 +95,25 @@ assert_eq "out of range choice refused" 1 "$?"
 assert_contains "out of range explained" "$(cat "$SANDBOX/out")" "not one of the choices"
 
 reset_state
+printf '9\nr\n1\nfake1\n' > "$SANDBOX/in"
+main --image "$SANDBOX/os.img" < "$SANDBOX/in" > "$SANDBOX/out" 2>&1
+assert_eq "bad choice and rescan then pick works" 0 "$?"
+assert_contains "rescan offered" "$(cat "$SANDBOX/out")" "r to rescan"
+
+reset_state
+printf 'q\n' > "$SANDBOX/in"
+main --image "$SANDBOX/os.img" < "$SANDBOX/in" > "$SANDBOX/out" 2>&1
+assert_eq "quit at the disk menu" 1 "$?"
+
+reset_state
+list_disks() { :; }
+printf '\nq\n' > "$SANDBOX/in"
+main --image "$SANDBOX/os.img" < "$SANDBOX/in" > "$SANDBOX/out" 2>&1
+assert_eq "empty list rescans then quits" 1 "$?"
+assert_contains "empty list prompts rescan" "$(cat "$SANDBOX/out")" "press Enter to rescan"
+list_disks() { printf 'fake1|%s|Fake Card\nfake2|2000000|Tiny Card\n' "$FAKE_SIZE"; }
+
+reset_state
 run_flash --image "$SANDBOX/os.img" --disk disk0 --yes
 assert_eq "disk that is not removable refused" 1 "$RC"
 assert_contains "refusal explained" "$OUT" "not a removable disk"
@@ -128,7 +147,7 @@ reset_state
 list_disks() { :; }
 run_flash --image "$SANDBOX/os.img" --yes
 assert_eq "no disks found" 1 "$RC"
-assert_contains "no disks explained" "$OUT" "no removable disks found"
+assert_contains "no disks explained" "$OUT" "No removable disks found"
 list_disks() { printf 'fake1|%s|Fake Card\nfake2|2000000|Tiny Card\n' "$FAKE_SIZE"; }
 
 reset_state
