@@ -86,7 +86,7 @@ assert_eq "big sizes use gigabytes" "256.1 GB" "$(human_size 256060514304)"
 reset_state
 printf '\nfake1\n' > "$SANDBOX/in"
 main --image "$SANDBOX/os.img" < "$SANDBOX/in" > "$SANDBOX/out" 2>&1
-assert_eq "empty choice picks the first disk" 0 "$?"
+assert_eq "empty choice refused with several disks" 1 "$?"
 
 reset_state
 printf '9\n' > "$SANDBOX/in"
@@ -184,6 +184,104 @@ assert_not_contains "linux skips loop devices" "$lin" "loop0"
 assert_not_contains "linux skips a non removable card slot" "$lin" "mmcblk0"
 PATH=$OLD_PATH
 
+TOOLS=$SANDBOX/tools
+mkdir -p "$TOOLS"
+make_installer() {
+  cat > "$TOOLS/$1" << EOT
+#!/bin/sh
+echo "$1 \$*" >> "$SANDBOX/installs"
+for last in "\$@"; do :; done
+case "\$last" in
+  $2) printf '#!/bin/sh\\n' > "$TOOLS/$3"; chmod +x "$TOOLS/$3" ;;
+esac
+EOT
+  chmod +x "$TOOLS/$1"
+}
+OLD_PATH=$PATH
+PATH=$TOOLS:$PATH
+: > "$SANDBOX/installs"
+
+OS=Linux
+ASSUME_YES=true
+make_installer apt-get faketool faketool
+need_tool faketool > "$SANDBOX/out" 2>&1
+assert_eq "missing tool installed on apt systems" 0 "$?"
+assert_contains "apt refreshes then installs" "$(cat "$SANDBOX/installs")" "apt-get install -y faketool"
+rm -f "$TOOLS/faketool" "$TOOLS/apt-get"
+hash -r
+
+make_installer dnf faketool faketool
+package_manager() { printf 'dnf'; }
+need_tool faketool > "$SANDBOX/out" 2>&1
+assert_eq "missing tool installed on dnf systems" 0 "$?"
+assert_contains "dnf install used" "$(cat "$SANDBOX/installs")" "dnf install -y faketool"
+unset -f package_manager
+. "$ROOT/tools/flash-sd.sh"
+set +e
+OS=Linux
+ASSUME_YES=true
+rm -f "$TOOLS/faketool" "$TOOLS/dnf"
+hash -r
+
+assert_eq "xz is xz-utils on apt" xz-utils "$(package_for xz apt-get)"
+assert_eq "xz is xz elsewhere" xz "$(package_for xz dnf)"
+assert_eq "cmp comes from diffutils" diffutils "$(package_for cmp pacman)"
+assert_eq "dd comes from coreutils" coreutils "$(package_for dd apk)"
+assert_eq "other tools keep their name" curl "$(package_for curl apt-get)"
+
+OS=Darwin
+running_as_root() { return 1; }
+make_installer brew faketool faketool
+need_tool faketool > "$SANDBOX/out" 2>&1
+assert_eq "missing tool installed with brew" 0 "$?"
+assert_contains "brew install used" "$(cat "$SANDBOX/installs")" "brew install faketool"
+rm -f "$TOOLS/faketool"
+hash -r
+running_as_root() { return 0; }
+need_tool faketool > "$SANDBOX/out" 2>&1
+assert_eq "brew refused when run as root" 1 "$?"
+assert_contains "brew root refusal explained" "$(cat "$SANDBOX/out")" "without sudo"
+assert_eq "nothing installed when refused" 0 "$([ -e "$TOOLS/faketool" ] && echo 1 || echo 0)"
+running_as_root() { [ "$(id -u)" -eq 0 ]; }
+rm -f "$TOOLS/brew"
+
+ASSUME_YES=false
+OS=Linux
+make_installer apt-get faketool faketool
+: > "$SANDBOX/installs"
+printf 'n\n' | need_tool faketool > "$SANDBOX/out" 2>&1
+assert_eq "declining the install stops" 1 "$?"
+assert_contains "declined install says what to do" "$(cat "$SANDBOX/out")" "Install it and run this again"
+assert_eq "declined install runs nothing" 0 "$(wc -c < "$SANDBOX/installs" | tr -d ' ')"
+printf 'y\n' | need_tool faketool > "$SANDBOX/out" 2>&1
+assert_eq "agreeing installs" 0 "$?"
+assert_contains "prompt names the tool and manager" "$(cat "$SANDBOX/out")" "Install faketool with apt?"
+rm -f "$TOOLS/faketool"
+hash -r
+printf '\n' | need_tool faketool > "$SANDBOX/out" 2>&1
+assert_eq "enter alone means yes" 0 "$?"
+rm -f "$TOOLS/faketool" "$TOOLS/apt-get"
+hash -r
+ASSUME_YES=true
+OS=Darwin
+
+PATH=$OLD_PATH
+OS=Darwin
+need_tool nosuchtool99 > "$SANDBOX/out" 2>&1
+assert_eq "no brew gives a clear failure" 1 "$?"
+assert_contains "brew help given" "$(cat "$SANDBOX/out")" "https://brew.sh"
+
+OS=Linux
+make_installer apt-get never faketool2
+PATH=$TOOLS:$PATH
+need_tool faketool2 > "$SANDBOX/out" 2>&1
+assert_eq "install that does not provide the tool fails" 1 "$?"
+assert_contains "still missing said out loud" "$(cat "$SANDBOX/out")" "still missing"
+PATH=$OLD_PATH
+OS=$(uname -s)
+ASSUME_YES=false
+rm -f "$TOOLS/apt-get"
+
 fetch_checksum() { printf '%s' "$FAKE_SUM"; }
 printf 'data' > "$SANDBOX/dl.bin"
 FAKE_SUM=$(sha256_of "$SANDBOX/dl.bin")
@@ -198,6 +296,70 @@ check_download "$SANDBOX/dl.bin" url > "$SANDBOX/out" 2>&1
 assert_eq "missing checksum tolerated" 0 "$?"
 assert_contains "missing checksum said out loud" "$(cat "$SANDBOX/out")" "not checked"
 
-assert_eq "default image is pinned" 1 "$(printf '%s' "$DEFAULT_IMAGE" | grep -c 'trunk.120.*Orangepizero2w.*\.img\.xz$')"
+assert_eq "tested image is pinned" 1 "$(printf '%s' "$TESTED_URL" | grep -c 'trunk.120.*Orangepizero2w.*\.img\.xz$')"
+assert_eq "tested image is marked" "TESTED/WORKING" "$(image_status "$TESTED_URL")"
+assert_eq "other images are untested" "untested" "$(image_status https://x/26.11.0-trunk.119/a.img.xz)"
+assert_contains "trunk 137 is known bad" "$(image_status https://x/26.11.0-trunk.137/a.img.xz)" "KNOWN BAD"
+assert_eq "armbian names detected" 0 "$(is_armbian Armbian_community_x.img.xz; echo $?)"
+assert_eq "other names not armbian" 1 "$(is_armbian 2024-raspios.img.xz; echo $?)"
+
+discover_images() { printf 'Armbian x|https://github.com/armbian/community/releases/download/26.11.0-trunk.119/b.img.xz\n'; }
+IMAGE=
+ASSUME_YES=false
+printf '1\n' > "$SANDBOX/in"
+choose_image < "$SANDBOX/in" > "$SANDBOX/out" 2>&1
+assert_eq "menu pick 1 is the tested image" "$TESTED_URL" "$IMAGE"
+assert_contains "menu marks tested" "$(cat "$SANDBOX/out")" "(TESTED/WORKING)"
+assert_contains "menu marks untested" "$(cat "$SANDBOX/out")" "(untested)"
+IMAGE=
+printf '2\n' > "$SANDBOX/in"
+choose_image < "$SANDBOX/in" > "$SANDBOX/out" 2>&1
+assert_contains "menu pick 2 is the other image" "$IMAGE" "trunk.119"
+IMAGE=
+printf '3\n/tmp/my.img\n' > "$SANDBOX/in"
+choose_image < "$SANDBOX/in" > "$SANDBOX/out" 2>&1
+assert_eq "menu custom path" "/tmp/my.img" "$IMAGE"
+IMAGE=
+printf '9\n' > "$SANDBOX/in"
+choose_image < "$SANDBOX/in" > "$SANDBOX/out" 2>&1
+assert_eq "menu bad choice refused" 1 "$?"
+IMAGE=
+ASSUME_YES=true
+choose_image > /dev/null 2>&1
+assert_eq "yes mode uses the tested image" "$TESTED_URL" "$IMAGE"
+ASSUME_YES=false
+
+P_SSID='Home "Net"'; P_WIFIKEY='p$ss`w\rd'; P_COUNTRY=US; P_TZ=America/Phoenix; P_USER=justin; P_PASS='a"b$c'; P_GITHUB=JustinOros
+render_preset > "$SANDBOX/preset"
+assert_contains "preset escapes quotes" "$(cat "$SANDBOX/preset")" 'PRESET_NET_WIFI_SSID="Home \"Net\""'
+assert_contains "preset escapes dollar and backtick" "$(cat "$SANDBOX/preset")" 'PRESET_NET_WIFI_KEY="p\$ss\`w\\rd"'
+assert_contains "preset has user" "$(cat "$SANDBOX/preset")" 'PRESET_USER_NAME="justin"'
+assert_contains "preset has key url" "$(cat "$SANDBOX/preset")" 'PRESET_USER_KEY="https://github.com/JustinOros.keys"'
+assert_eq "preset sourceable" "Home \"Net\"" "$(sh -c ". $SANDBOX/preset; printf %s \"\$PRESET_NET_WIFI_SSID\"")"
+assert_eq "preset password round trips" 'a"b$c' "$(sh -c ". $SANDBOX/preset; printf %s \"\$PRESET_USER_PASSWORD\"")"
+P_SSID=
+render_preset > "$SANDBOX/preset"
+assert_contains "wired preset" "$(cat "$SANDBOX/preset")" 'PRESET_NET_ETHERNET_ENABLED="1"'
+
+dd if=/dev/zero of="$SANDBOX/fs.part" bs=1048576 count=8 2> /dev/null
+mke2fs -q -t ext4 -F "$SANDBOX/fs.part" > /dev/null 2>&1
+debugfs -w -R "mkdir /root" "$SANDBOX/fs.part" > /dev/null 2>&1
+head -c 1048576 /dev/zero > "$SANDBOX/hl.img"
+cat "$SANDBOX/fs.part" >> "$SANDBOX/hl.img"
+printf '\200\000\000\000\203\000\000\000\000\010\000\000\000\040\000\000' > "$SANDBOX/ent"
+dd if="$SANDBOX/ent" of="$SANDBOX/hl.img" bs=1 seek=446 conv=notrunc 2> /dev/null
+printf '\125\252' | dd of="$SANDBOX/hl.img" bs=1 seek=510 conv=notrunc 2> /dev/null
+DEBUGFS=$(command -v debugfs)
+assert_eq "root offset found" 1048576 "$(find_root_offset "$SANDBOX/hl.img")"
+P_ENABLED=true; P_SSID=Net; P_WIFIKEY=secretkey1; P_USER=justin; P_PASS=hunter22x; P_TZ=UTC; P_COUNTRY=US; P_GITHUB=
+IMG_FILE=$SANDBOX/hl.img
+need_debugfs() { return 0; }
+apply_preset > "$SANDBOX/out" 2>&1
+assert_eq "preset applied" 0 "$?"
+assert_contains "image copy used" "$IMG_FILE" "headless.img"
+assert_contains "preset readable from image" "$(debugfs -R 'cat /root/.not_logged_in_yet' "$IMG_FILE?offset=1048576" 2> /dev/null)" 'PRESET_USER_NAME="justin"'
+assert_eq "original image untouched" 0 "$(debugfs -R 'stat /root/.not_logged_in_yet' "$SANDBOX/hl.img?offset=1048576" 2>&1 | grep -c 'Type: regular')"
+cleanup
+assert_eq "copy cleaned up" 1 "$([ -e "$TC_FLASH_DIR/headless.img" ]; echo $?)"
 
 finish

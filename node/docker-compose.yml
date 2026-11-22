@@ -61,9 +61,9 @@ services:
         condition: service_completed_successfully
 
   web:
-    image: alpine:3.20
+    image: busybox:1.36
     user: "1000:1000"
-    command: ["busybox", "httpd", "-f", "-p", "8080", "-h", "/web"]
+    command: ["httpd", "-f", "-p", "8080", "-h", "/web"]
     ports:
       - "${TC_STATUS_BIND:-127.0.0.1:8080}:8080"
     volumes:

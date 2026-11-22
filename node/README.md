@@ -20,7 +20,11 @@ For a Raspberry Pi or Orange Pi, `tools/flash-sd.sh` writes the operating system
 sh tools/flash-sd.sh
 ```
 
-It lists only removable disks, makes you type the disk name before erasing, and downloads the Armbian image for the Orange Pi Zero 2W unless you pass `--image FILE_OR_URL`. When it finishes, put the card in the board, attach a screen and keyboard, make your user in the first-login wizard, then run `setup-node.sh` on the board.
+It shows a menu of images and marks the one confirmed to work on the Orange Pi Zero 2W as `(TESTED/WORKING)`. You can also pick a custom URL or file, or pass `--image FILE_OR_URL`. It lists only removable disks, never picks one for you, and makes you type the disk name before erasing.
+
+For Armbian images it can also set up the board with no screen: it asks for a username, password, Wi-Fi, timezone, and optionally your GitHub username for SSH keys, and puts them on the card for the first boot. Skip that with `--no-headless`. The passwords sit on the card in plain text until the board finishes its first boot.
+
+If a tool it needs is missing (such as `xz`), it asks before installing it with Homebrew, apt, dnf, pacman, zypper, or apk. When it finishes, put the card in the board, find its address in your router app, `ssh` in, and run `setup-node.sh`.
 
 ## Files
 
