@@ -115,6 +115,31 @@ main confirm grace > /dev/null
 assert_contains "confirm with name confirms" "$(cat "$CALLS")" "confirm.sh grace"
 assert_contains "confirm with name applies now" "$(cat "$CALLS")" "apply-peers.sh"
 
+: > "$CALLS"
+inode_before=$(find "$TC_HOME/tinycloud.conf" -printf '%i' 2> /dev/null || stat -f %i "$TC_HOME/tinycloud.conf")
+out=$(printf 'n3w-T0ken_9\n' | main relay-token 2>&1)
+assert_contains "relay-token confirms" "$out" "Relay token updated."
+assert_contains "relay-token writes the new token" "$(cat "$TC_HOME/tinycloud.conf")" "RELAY_TOKEN=n3w-T0ken_9"
+assert_eq "old token is gone" 0 "$(grep -c 's3cr3t-token' "$TC_HOME/tinycloud.conf")"
+assert_contains "other settings kept" "$(cat "$TC_HOME/tinycloud.conf")" "GATEWAY_HOST=gw.example.com"
+assert_contains "wifi password kept" "$(cat "$TC_HOME/tinycloud.conf")" "WIFI_PASSWORD=hunter2"
+assert_eq "config file keeps its inode" "$inode_before" "$(find "$TC_HOME/tinycloud.conf" -printf '%i' 2> /dev/null || stat -f %i "$TC_HOME/tinycloud.conf")"
+assert_contains "relay-token applies it now" "$(cat "$CALLS")" "relay.sh"
+assert_not_contains "token never on the command line" "$(cat "$CALLS")" "n3w-T0ken_9"
+before=$(cat "$TC_HOME/tinycloud.conf")
+: > "$CALLS"
+out=$(printf 'bad token!\n' | main relay-token 2>&1)
+printf 'bad token!\n' | main relay-token > /dev/null 2>&1
+bad_rc=$?
+assert_eq "bad token refused" 1 "$bad_rc"
+assert_contains "bad token explained" "$out" "not a valid token"
+assert_eq "bad token changes nothing" "$before" "$(cat "$TC_HOME/tinycloud.conf")"
+assert_eq "bad token does not touch syncthing" "" "$(cat "$CALLS")"
+printf '' | main relay-token > /dev/null 2>&1
+empty_rc=$?
+assert_eq "empty token refused" 1 "$empty_rc"
+assert_contains "help lists relay-token" "$(usage)" "relay-token"
+
 assert_eq "version prints" "0.1.0" "$(main version)"
 main nonsense > /dev/null 2>&1
 assert_eq "unknown command returns 2" 2 "$?"

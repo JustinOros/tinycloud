@@ -50,6 +50,20 @@ It prints a table of every node: online or offline, space, warnings. Add `--watc
 
 On the gateway itself, `tinycloud-gw status` prints the same table.
 
+## Change the relay token
+
+```
+tinycloud-gw rotate-token
+```
+
+This makes a new relay token, restarts the relay, and prints the new token. Nodes cannot use the relay until each one has it. On each node, update the node first if it is older, then run:
+
+```
+tinycloud relay-token
+```
+
+Paste the new token when asked. Take a new backup afterward, since older backups hold the old token.
+
 ## If the gateway dies
 
 1. Make a new Linode and run `setup.sh` with the same hostname.

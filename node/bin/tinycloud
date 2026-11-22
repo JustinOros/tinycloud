@@ -175,6 +175,42 @@ cmd_confirm() {
   fi
 }
 
+read_token() {
+  if [ -t 0 ]; then
+    printf 'New relay token: ' >&2
+    stty -echo 2> /dev/null
+    read -r rt_in
+    stty echo 2> /dev/null
+    printf '\n' >&2
+  else
+    read -r rt_in
+  fi
+  printf '%s' "${rt_in:-}" | tr -d '\r '
+}
+
+cmd_relay_token() {
+  cr_file=$(conf_file) || { echo "No config file found." >&2; return 1; }
+  cr_token=$(read_token)
+  if ! printf '%s' "$cr_token" | grep -Eq '^[A-Za-z0-9_-]{1,128}$'; then
+    echo "That is not a valid token." >&2
+    return 1
+  fi
+  if ! grep -q '^RELAY_TOKEN=' "$cr_file"; then
+    echo "No RELAY_TOKEN line in $cr_file." >&2
+    return 1
+  fi
+  if [ ! -w "$cr_file" ]; then
+    echo "Cannot write $cr_file. Try: sudo tinycloud relay-token" >&2
+    return 1
+  fi
+  cr_tmp=$(mktemp) || return 1
+  sed "s/^RELAY_TOKEN=.*/RELAY_TOKEN=$cr_token/" "$cr_file" > "$cr_tmp"
+  cat "$cr_tmp" > "$cr_file"
+  rm -f "$cr_tmp"
+  agent_run relay || return 1
+  echo "Relay token updated."
+}
+
 usage() {
   cat << EOF
 usage: tinycloud COMMAND
@@ -186,6 +222,7 @@ usage: tinycloud COMMAND
   join              print the line to send to the gateway owner
   path              show where your files live (also linked as ~/tinycloud)
   confirm [NAME]    list or confirm new peers (PEERS_CONFIRM=manual)
+  relay-token       set a new relay token from the gateway owner
   leave             leave the cloud, files stay here
   version           show the version
 EOF
@@ -204,6 +241,7 @@ main() {
     support) cmd_support ;;
     confirm) cmd_confirm "$@" ;;
     leave) cmd_leave ;;
+    relay-token) cmd_relay_token ;;
     version) cat "$TC_HOME/VERSION" ;;
     *)
       usage >&2

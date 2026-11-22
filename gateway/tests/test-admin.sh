@@ -335,6 +335,34 @@ rm -f "$GW_STATE/aggregated.at"
 assert_contains "view falls back to stored time" "$(cmd_view)" '"generated":"2020-01-01T00:00:00Z"'
 
 reset
+printf 'GATEWAY_HOST=gw.example.com\nRELAY_TOKEN=oldtoken\n' > "$GW_HOME/.env"
+printf 'GATEWAY_HOST=gw.example.com\nGATEWAY_ID=X\nRELAY_TOKEN=oldtoken\nOTHER=keep\n' > "$GW_HOME/node-lines.txt"
+chmod 600 "$GW_HOME/.env" "$GW_HOME/node-lines.txt"
+out=$(printf 'no\n' | cmd_rotate_token 2>&1)
+assert_contains "rotate asks first" "$out" "cancelled"
+assert_contains "rotate cancelled keeps token" "$(cat "$GW_HOME/.env")" "RELAY_TOKEN=oldtoken"
+out=$(cmd_rotate_token --yes 2>&1)
+newtok=$(sed -n 's/^RELAY_TOKEN=//p' "$GW_HOME/.env")
+assert_eq "new token differs" 1 "$([ "$newtok" != oldtoken ] && echo 1 || echo 0)"
+assert_eq "new token is valid" 32 "${#newtok}"
+assert_contains "env keeps host" "$(cat "$GW_HOME/.env")" "GATEWAY_HOST=gw.example.com"
+assert_contains "node lines get the token" "$(cat "$GW_HOME/node-lines.txt")" "RELAY_TOKEN=$newtok"
+assert_contains "node lines keep other values" "$(cat "$GW_HOME/node-lines.txt")" "OTHER=keep"
+assert_eq "old token gone from env" 0 "$(grep -c oldtoken "$GW_HOME/.env")"
+assert_eq "old token gone from node lines" 0 "$(grep -c oldtoken "$GW_HOME/node-lines.txt")"
+assert_eq "env stays private" 600 "$(stat -c %a "$GW_HOME/.env" 2> /dev/null || stat -f %Lp "$GW_HOME/.env")"
+assert_eq "node lines stay private" 600 "$(stat -c %a "$GW_HOME/node-lines.txt" 2> /dev/null || stat -f %Lp "$GW_HOME/node-lines.txt")"
+assert_contains "output shows the new token" "$out" "RELAY_TOKEN=$newtok"
+assert_contains "output says what nodes run" "$out" "tinycloud relay-token"
+assert_contains "relay restarted" "$(cat "$FAKE/calls")" "dc up -d --force-recreate relay"
+assert_contains "audit notes the rotation" "$(cat "$AUDIT")" "rotate-token"
+assert_eq "audit never holds the token" 0 "$(grep -c "$newtok" "$AUDIT")"
+rm -f "$GW_HOME/.env"
+assert_eq "rotate needs gateway settings" 1 "$(cmd_rotate_token --yes > /dev/null 2>&1 && echo 0 || echo 1)"
+assert_eq "rotate rejects odd args" 1 "$(cmd_rotate_token --bogus > /dev/null 2>&1 && echo 0 || echo 1)"
+assert_contains "help lists rotate-token" "$(usage)" "rotate-token"
+
+reset
 printf '{"connections":null}' > "$FAKE/connections.json"
 printf 'yes\n' | cmd_approve rocky "$N1" reader justin > /dev/null 2>&1
 cmd_aggregate

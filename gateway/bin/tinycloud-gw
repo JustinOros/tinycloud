@@ -24,6 +24,7 @@ usage: tinycloud-gw COMMAND
   status [--color]                           print a table of nodes and their status
   backup                                     save the gateway identity
   restore FILE [--yes]                       restore a saved identity
+  rotate-token [--yes]                       make a new relay token
   version
 EOT
 }
@@ -525,6 +526,43 @@ do_restore() {
   log INFO "restored"
 }
 
+replace_token() {
+  rp_file=$1
+  rp_tmp=$rp_file.tmp
+  [ -f "$rp_file" ] || return 0
+  (umask 077 && sed "s/^RELAY_TOKEN=.*/RELAY_TOKEN=$2/" "$rp_file" > "$rp_tmp") && mv "$rp_tmp" "$rp_file"
+}
+
+do_rotate_token() {
+  for rt_arg in "$@"; do
+    case $rt_arg in
+      --yes) ASSUME_YES=1 ;;
+      *)
+        usage
+        return 1
+        ;;
+    esac
+  done
+  if [ ! -f "$GW_HOME/.env" ]; then
+    log ERROR "no gateway settings found, run setup.sh first"
+    return 1
+  fi
+  printf 'Make a new relay token. Nodes cannot use the relay until each one gets the new token.\n'
+  confirm || { echo "cancelled"; return 1; }
+  rt_token=$(gen_token)
+  valid_token "$rt_token" || { log ERROR "could not make a token"; return 1; }
+  replace_token "$GW_HOME/.env" "$rt_token" || { log ERROR "could not save the new token"; return 1; }
+  replace_token "$GW_HOME/node-lines.txt" "$rt_token" || log WARN "could not update node-lines.txt"
+  dc up -d --force-recreate relay > /dev/null 2>&1 || { log ERROR "could not restart the relay"; return 1; }
+  audit "rotate-token"
+  log INFO "relay token changed"
+  printf '\nNew token (secret):\n\nRELAY_TOKEN=%s\n\n' "$rt_token"
+  printf 'On each node, update it with:  tinycloud relay-token\n'
+  printf 'Older backups hold the old token. Make a new one now with:  tinycloud-gw backup\n'
+}
+
+cmd_rotate_token() { locked do_rotate_token "$@"; }
+
 cmd_approve() { locked do_approve "$@"; }
 cmd_remove() { locked do_remove "$@"; }
 cmd_restore() { locked do_restore "$@"; }
@@ -543,6 +581,7 @@ main() {
     status) cmd_status "$@" ;;
     backup) cmd_backup ;;
     restore) cmd_restore "$@" ;;
+    rotate-token) cmd_rotate_token "$@" ;;
     version) echo "$GW_VERSION" ;;
     help | -h | --help) usage ;;
     *)

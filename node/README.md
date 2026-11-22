@@ -31,7 +31,8 @@ Scripts that run inside the agent container.
 | `agent/join.sh` | prints the line to send to the gateway owner |
 | `agent/confirm.sh` | confirms new peers in manual mode |
 | `agent/leave.sh` | leaves the cloud, keeps the files |
-| `bin/tinycloud` | the command people type: doctor, logs, debug, support, join, path, confirm, leave |
+| `agent/relay.sh` | applies a new relay token |
+| `bin/tinycloud` | the command people type: doctor, logs, debug, support, join, path, confirm, relay-token, leave |
 | `firewall/` | nftables rules and the script that loads them |
 | `docker-compose.yml` | Syncthing and the agent, no published ports |
 | `tinycloud.conf.example` | all config keys |
