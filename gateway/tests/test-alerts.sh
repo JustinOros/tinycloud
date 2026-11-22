@@ -30,6 +30,9 @@ exit "\$(cat "$SANDBOX/curl.rc" 2> /dev/null || echo 0)"
 EOT
 chmod +x "$SANDBOX/fakebin/curl"
 PATH=$SANDBOX/fakebin:$PATH
+ALERT_REBOOT_FILE=$SANDBOX/reboot-required
+export ALERT_REBOOT_FILE
+st_api() { return "${ST_RC:-0}"; }
 
 T0=$(date -u -d 2026-11-21T12:00:00Z +%s)
 REPORTED=2026-11-21T11:00:00Z
@@ -274,6 +277,56 @@ view "[$(node grace false)]"
 printf 'garbage' > "$GW_STATE/alerts.json"
 tick "$T0"
 assert_jq "bad state file is replaced" "$(cat "$GW_STATE/alerts.json")" '.p["grace:offline"] != null'
+
+reset
+alert_set heartbeat 'not a url' > /dev/null 2>&1
+assert_eq "bad heartbeat rejected" "" "$(alert_get ALERT_HEARTBEAT '')"
+alert_set heartbeat 'https://hc-ping.com/secret-uuid-1234' > /dev/null
+assert_eq "heartbeat saved" "https://hc-ping.com/secret-uuid-1234" "$(alert_get ALERT_HEARTBEAT '')"
+assert_contains "show heartbeat host" "$(alert_show)" "heartbeat          on (hc-ping.com)"
+assert_not_contains "show hides heartbeat secret" "$(alert_show)" "secret-uuid-1234"
+run_heartbeat
+assert_eq "heartbeat pings" 1 "$(sent_count)"
+assert_contains "heartbeat url on stdin" "$(cat "$SANDBOX/curl.stdin")" "secret-uuid-1234"
+assert_not_contains "heartbeat url not in arguments" "$(cat "$SANDBOX/curl.args")" "secret-uuid-1234"
+ST_RC=1
+: > "$SANDBOX/sent"
+run_heartbeat
+assert_eq "no ping when syncthing is down" 0 "$(sent_count)"
+assert_eq "syncthing down reports failure" 1 "$(run_heartbeat > /dev/null 2>&1; echo $?)"
+ST_RC=0
+echo 1 > "$SANDBOX/curl.rc"
+assert_eq "failed ping reports failure" 1 "$(run_heartbeat > /dev/null 2>&1; echo $?)"
+rm -f "$SANDBOX/curl.rc"
+assert_contains "test pings the heartbeat" "$(alert_test)" "heartbeat sent"
+alert_set heartbeat off > /dev/null
+assert_contains "heartbeat off shown" "$(alert_show)" "heartbeat          off"
+: > "$SANDBOX/sent"
+run_heartbeat
+assert_eq "heartbeat off sends nothing" 0 "$(sent_count)"
+assert_eq "test with nothing set fails" 1 "$(alert_test > /dev/null 2>&1; echo $?)"
+
+reset
+alert_set gateway-reboot 1h > /dev/null
+assert_eq "gateway reboot saved" 60 "$(alert_get ALERT_GWREBOOT 0)"
+assert_contains "show gateway reboot" "$(alert_show)" "gw reboot after    1 hour"
+alert_set gateway-reboot 36h > /dev/null
+alert_set url 'https://ntfy.sh/t' > /dev/null
+view "[$(node grace true)]"
+touch -d "@$((T0 - 3600))" "$ALERT_REBOOT_FILE"
+tick "$T0"
+assert_eq "recent reboot request stays quiet" 0 "$(sent_count)"
+touch -d "@$((T0 - 130000))" "$ALERT_REBOOT_FILE"
+tick "$T0"
+assert_eq "old reboot request alerts" 1 "$(sent_count)"
+assert_contains "gateway reboot text" "$(cat "$SANDBOX/sent")" "The gateway needs a reboot"
+tick $((T0 + 300))
+assert_eq "gateway reboot alert once" 1 "$(sent_count)"
+rm -f "$ALERT_REBOOT_FILE"
+tick $((T0 + 600))
+assert_eq "reboot done is announced" 2 "$(sent_count)"
+assert_contains "gateway rebooted text" "$(cat "$SANDBOX/sent")" "The gateway was rebooted"
+assert_jq "state clear after reboot" "$(cat "$GW_STATE/alerts.json")" '.p == {}'
 
 rm -rf "$SANDBOX"
 finish

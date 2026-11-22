@@ -6,9 +6,11 @@ GW_DIR=${GW_DIR:-$(cd "$(dirname "$0")" && pwd)}
 DRY_RUN=false
 HOST=
 SSH_PORT=22
+AUTO_REBOOT=no
+REBOOT_TIME=04:00
 
 usage() {
-  echo "usage: sudo sh gateway.sh --host HOSTNAME [--ssh-port N] [--dry-run]"
+  echo "usage: sudo sh gateway.sh --host HOSTNAME [--ssh-port N] [--auto-reboot yes|no] [--reboot-time TIME] [--dry-run]"
 }
 
 run() {
@@ -46,6 +48,16 @@ parse_args() {
         SSH_PORT=$2
         shift 2
         ;;
+      --auto-reboot)
+        [ $# -ge 2 ] || { usage; return 1; }
+        AUTO_REBOOT=$2
+        shift 2
+        ;;
+      --reboot-time)
+        [ $# -ge 2 ] || { usage; return 1; }
+        REBOOT_TIME=$2
+        shift 2
+        ;;
       --dry-run)
         DRY_RUN=true
         shift
@@ -65,6 +77,18 @@ parse_args() {
     log ERROR "--ssh-port is invalid"
     return 1
   fi
+  case $AUTO_REBOOT in
+    yes | no) ;;
+    *)
+      log ERROR "--auto-reboot must be yes or no"
+      return 1
+      ;;
+  esac
+  if ! valid_reboot_time "$REBOOT_TIME"; then
+    log ERROR "--reboot-time is invalid"
+    return 1
+  fi
+  REBOOT_TIME=$(time_24h "$REBOOT_TIME")
 }
 
 check_os() {
@@ -101,7 +125,13 @@ render_unattended() {
     printf '  "origin=Debian,codename=%s-security,label=Debian-Security";\n' "$os_codename"
   fi
   printf '  "origin=Docker";\n};\n'
-  printf 'Unattended-Upgrade::Automatic-Reboot "false";\n'
+  if [ "$AUTO_REBOOT" = yes ]; then
+    printf 'Unattended-Upgrade::Automatic-Reboot "true";\n'
+    printf 'Unattended-Upgrade::Automatic-Reboot-WithUsers "true";\n'
+    printf 'Unattended-Upgrade::Automatic-Reboot-Time "%s";\n' "$REBOOT_TIME"
+  else
+    printf 'Unattended-Upgrade::Automatic-Reboot "false";\n'
+  fi
 }
 
 render_periodic() {

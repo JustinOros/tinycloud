@@ -8,6 +8,8 @@ INPUT=${SETUP_INPUT:-/dev/tty}
 GW_HOME=${GW_HOME:-/opt/tinycloud-gateway}
 HOST=
 SSH_PORT=
+AUTO_REBOOT=
+REBOOT_TIME=
 ASSUME_YES=false
 DRY_RUN=false
 SRC=
@@ -64,7 +66,7 @@ ask_yes() {
 }
 
 usage() {
-  say "usage: sh setup.sh [--host HOSTNAME] [--ssh-port N] [--yes] [--dry-run]"
+  say "usage: sh setup.sh [--host HOSTNAME] [--ssh-port N] [--auto-reboot yes|no] [--reboot-time TIME] [--yes] [--dry-run]"
 }
 
 parse_args() {
@@ -78,6 +80,16 @@ parse_args() {
       --ssh-port)
         [ $# -ge 2 ] || { usage; return 1; }
         SSH_PORT=$2
+        shift 2
+        ;;
+      --auto-reboot)
+        [ $# -ge 2 ] || { usage; return 1; }
+        AUTO_REBOOT=$2
+        shift 2
+        ;;
+      --reboot-time)
+        [ $# -ge 2 ] || { usage; return 1; }
+        REBOOT_TIME=$2
         shift 2
         ;;
       --yes)
@@ -258,12 +270,52 @@ choose_ssh_port() {
   valid_port "$SSH_PORT" || fail "bad SSH port"
 }
 
+choose_reboot() {
+  case $AUTO_REBOOT in
+    '' | yes | no) ;;
+    *) fail "--auto-reboot must be yes or no"; return 1 ;;
+  esac
+  if [ -z "$AUTO_REBOOT" ]; then
+    if [ "$ASSUME_YES" = true ] || ask_yes "Reboot automatically when an update needs it? (about a minute offline)" y; then
+      AUTO_REBOOT=yes
+    else
+      AUTO_REBOOT=no
+    fi
+  fi
+  if [ "$AUTO_REBOOT" = no ]; then
+    return 0
+  fi
+  cr_try=0
+  while [ "$cr_try" -lt 3 ]; do
+    if [ -z "$REBOOT_TIME" ]; then
+      ask_value "Reboot time (this server's local time, like 4:00 AM)" "4:00 AM" || return 1
+      REBOOT_TIME=$ANSWER
+    fi
+    if valid_reboot_time "$REBOOT_TIME"; then
+      REBOOT_TIME=$(time_24h "$REBOOT_TIME")
+      return 0
+    fi
+    say "That is not a valid time."
+    REBOOT_TIME=
+    if [ "$ASSUME_YES" = true ]; then
+      break
+    fi
+    cr_try=$((cr_try + 1))
+  done
+  fail "no valid reboot time"
+}
+
 show_plan() {
   say ""
   say "This will:"
   say "  - install Docker, fail2ban, nftables, and automatic security updates"
   say "  - start the Syncthing, relay, and discovery services"
   say "  - open only ports $SSH_PORT (SSH), 22000, 22067, and 8443"
+  if [ "$AUTO_REBOOT" = yes ]; then
+    say "  - reboot at $(time_12h "$REBOOT_TIME") when an update needs it"
+  else
+    say "  - not reboot automatically (alerts will tell you when a reboot is needed)"
+  fi
   if has_ssh_key; then
     say "  - turn off SSH password logins (an SSH key was found)"
   else
@@ -279,7 +331,10 @@ show_plan() {
 }
 
 run_install() {
-  set -- --host "$HOST" --ssh-port "$SSH_PORT"
+  set -- --host "$HOST" --ssh-port "$SSH_PORT" --auto-reboot "$AUTO_REBOOT"
+  if [ "$AUTO_REBOOT" = yes ]; then
+    set -- "$@" --reboot-time "$REBOOT_TIME"
+  fi
   if [ "$DRY_RUN" = true ]; then
     set -- "$@" --dry-run
   fi
@@ -317,6 +372,7 @@ main() {
   choose_host || return 1
   check_dns "$HOST"
   choose_ssh_port || return 1
+  choose_reboot || return 1
   show_plan
   if ! ask_yes "Continue?" y; then
     say "cancelled"

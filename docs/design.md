@@ -60,6 +60,7 @@ Nobody ever auto-accepts a folder or a device. The introducer feature is never u
 - A nightly timer updates TinyCloud itself from the `stable` branch (default), from `main` (testing), or not at all.
 - An update that leaves Syncthing, the agent or the web page unhealthy is rolled back from a saved copy.
 - Publish a release with `git push origin main:stable`.
+- The gateway asks the same reboot question during `setup.sh` (default yes, at 4:00 AM). If it does not reboot automatically, an alert says when a reboot has been waiting too long.
 
 ## Joining
 
@@ -194,12 +195,13 @@ The gateway can tell you when something is wrong. It sends one message to a Disc
 | Low on space | `low-space` | 30 minutes |
 | File name conflicts | `conflicts` | 1 hour |
 | Reboot needed | `reboot` | right away (the node already waits 36 hours) |
+| Gateway needs a reboot | `gateway-reboot` | 1 day 12 hours |
 
 - `reminder 9am` sets the reminder hour, or `off` turns reminders off. `recovered no` turns off the resolved messages.
 - Status builds run every 5 minutes, so a wait shorter than that acts like 5 minutes.
 - If a message cannot be sent, it is tried again on the next build.
 - The address is a secret. It is stored in `alerts.conf` (mode 600), included in `tinycloud-gw backup`, and never shown in full or logged.
-- A gateway that is down cannot report itself. That needs a check from outside.
+- A gateway that is down cannot report itself. For that, set `tinycloud-gw alert set heartbeat ADDRESS` to a dead-man's-switch address such as healthchecks.io. The gateway pings it after every status build, and that service tells you when the pings stop. Set its period to 10 minutes and its grace time to 5. The gateway only pings while Syncthing is answering.
 
 ## Dashboard
 

@@ -144,3 +144,39 @@ put_folder() {
     '. * {id: $id, label: $label, path: $path, type: $type, devices: $devices, rescanIntervalS: 3600, fsWatcherEnabled: true, fsWatcherDelayS: 10}')
   st_api PUT "/rest/config/folders/$1" "$pf_body" > /dev/null
 }
+
+time_24h() {
+  t24_in=$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]' | tr -d ' ')
+  t24_re='^([0-9]{1,2})(:([0-9]{2}))?(AM|PM)?$'
+  t24_h=$(printf '%s' "$t24_in" | sed -nE "s/$t24_re/\\1/p" | sed 's/^0*\([0-9]\)/\1/')
+  t24_m=$(printf '%s' "$t24_in" | sed -nE "s/$t24_re/\\3/p" | sed 's/^0*\([0-9]\)/\1/')
+  t24_ap=$(printf '%s' "$t24_in" | sed -nE "s/$t24_re/\\4/p")
+  [ -n "$t24_h" ] || return 1
+  t24_m=${t24_m:-0}
+  [ "$t24_m" -le 59 ] || return 1
+  if [ -n "$t24_ap" ]; then
+    [ "$t24_h" -ge 1 ] && [ "$t24_h" -le 12 ] || return 1
+    if [ "$t24_ap" = AM ] && [ "$t24_h" -eq 12 ]; then
+      t24_h=0
+    elif [ "$t24_ap" = PM ] && [ "$t24_h" -ne 12 ]; then
+      t24_h=$((t24_h + 12))
+    fi
+  else
+    [ "$t24_h" -le 23 ] || return 1
+  fi
+  printf '%02d:%02d' "$t24_h" "$t24_m"
+}
+
+time_12h() {
+  t12_h=$(printf '%s' "${1%%:*}" | sed 's/^0*\([0-9]\)/\1/')
+  t12_m=${1#*:}
+  t12_ap=AM
+  [ "$t12_h" -ge 12 ] && t12_ap=PM
+  t12_h=$((t12_h % 12))
+  [ "$t12_h" -eq 0 ] && t12_h=12
+  printf '%s:%s %s' "$t12_h" "$t12_m" "$t12_ap"
+}
+
+valid_reboot_time() {
+  [ -n "$(time_24h "$1")" ]
+}

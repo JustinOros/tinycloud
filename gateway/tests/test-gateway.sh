@@ -27,6 +27,12 @@ assert_contains "debian 11 refused" "$out" "unsupported system"
 
 out=$(GW_OS_RELEASE=$HERE/fixtures/debian12 sh "$GW/gateway.sh" --dry-run 2>&1 || true)
 assert_contains "host required" "$out" "--host is missing or invalid"
+out=$(GW_OS_RELEASE=$HERE/fixtures/debian12 sh "$GW/gateway.sh" --dry-run --host gw.example.com --auto-reboot yes --reboot-time 9pm 2>&1 || true)
+assert_contains "reboot flags accepted" "$out" "dry run finished, nothing changed"
+out=$(GW_OS_RELEASE=$HERE/fixtures/debian12 sh "$GW/gateway.sh" --dry-run --host gw.example.com --auto-reboot maybe 2>&1 || true)
+assert_contains "bad auto reboot refused" "$out" "--auto-reboot must be yes or no"
+out=$(GW_OS_RELEASE=$HERE/fixtures/debian12 sh "$GW/gateway.sh" --dry-run --host gw.example.com --reboot-time 99:99 2>&1 || true)
+assert_contains "bad reboot time refused" "$out" "--reboot-time is invalid"
 out=$(GW_OS_RELEASE=$HERE/fixtures/debian12 sh "$GW/gateway.sh" --dry-run --host 'a/b' 2>&1 || true)
 assert_contains "bad host refused" "$out" "--host is missing or invalid"
 out=$(GW_OS_RELEASE=$HERE/fixtures/debian12 sh "$GW/gateway.sh" --dry-run --host gw.example.com --ssh-port 99999 2>&1 || true)
@@ -48,6 +54,12 @@ assert_contains "debian docker suite" "$(render_docker_sources)" "Suites: bookwo
 assert_contains "debian security origin" "$(render_unattended)" "origin=Debian,codename=bookworm-security,label=Debian-Security"
 assert_contains "docker origin" "$(render_unattended)" "origin=Docker"
 assert_contains "no auto reboot" "$(render_unattended)" 'Automatic-Reboot "false"'
+AUTO_REBOOT=yes
+REBOOT_TIME=04:00
+assert_contains "reboot on" "$(render_unattended)" 'Automatic-Reboot "true"'
+assert_contains "reboot time set" "$(render_unattended)" 'Automatic-Reboot-Time "04:00"'
+assert_contains "reboot with users" "$(render_unattended)" 'Automatic-Reboot-WithUsers "true"'
+AUTO_REBOOT=no
 
 GW_OS_RELEASE=$HERE/fixtures/ubuntu2404
 detect_os

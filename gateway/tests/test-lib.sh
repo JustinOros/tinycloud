@@ -59,4 +59,14 @@ assert_eq "verify code upper" "$(verify_code "$id")" "$(verify_code "$id" | tr '
 assert_eq "valid role" 0 "$(valid_role anchor && echo 0 || echo 1)"
 assert_eq "bad role" 1 "$(valid_role boss && echo 0 || echo 1)"
 
+assert_eq "time 4am" "04:00" "$(time_24h 4am)"
+assert_eq "time 9:30 PM" "21:30" "$(time_24h '9:30 PM')"
+assert_eq "time 24h" "13:05" "$(time_24h 13:05)"
+assert_eq "time 12am" "00:00" "$(time_24h 12am)"
+assert_eq "time rejected" 1 "$(time_24h 25:00 > /dev/null 2>&1; echo $?)"
+assert_eq "time 12h text" "4:00 AM" "$(time_12h 04:00)"
+assert_eq "time 12h noon" "12:00 PM" "$(time_12h 12:00)"
+assert_eq "valid reboot time" 0 "$(valid_reboot_time 4am; echo $?)"
+assert_eq "invalid reboot time" 1 "$(valid_reboot_time never > /dev/null 2>&1; echo $?)"
+
 finish

@@ -3,6 +3,7 @@ ALERT_DEFAULT_NOSTATUS=2160
 ALERT_DEFAULT_LOWSPACE=30
 ALERT_DEFAULT_CONFLICTS=60
 ALERT_DEFAULT_REBOOT=0
+ALERT_DEFAULT_GWREBOOT=2160
 ALERT_DEFAULT_REMINDER=9
 ALERT_DEFAULT_RECOVERED=yes
 ALERT_MAX_MINUTES=43200
@@ -121,6 +122,7 @@ alert_setting_key() {
     low-space) printf 'ALERT_LOWSPACE' ;;
     conflicts) printf 'ALERT_CONFLICTS' ;;
     reboot) printf 'ALERT_REBOOT' ;;
+    gateway-reboot) printf 'ALERT_GWREBOOT' ;;
     *) return 1 ;;
   esac
 }
@@ -153,6 +155,19 @@ alert_set() {
       fi
       alert_put ALERT_URL "$as_value"
       echo "alert address saved. Test it with: tinycloud-gw alert test"
+      ;;
+    heartbeat)
+      if [ "$as_value" = off ]; then
+        alert_put ALERT_HEARTBEAT ""
+        echo "heartbeat is off"
+        return 0
+      fi
+      if ! valid_alert_url "$as_value"; then
+        log ERROR "that does not look like a web address (http or https)"
+        return 1
+      fi
+      alert_put ALERT_HEARTBEAT "$as_value"
+      echo "heartbeat address saved. The gateway pings it after every status build."
       ;;
     reminder)
       as_hour=$(alert_hour "$as_value") || {
@@ -214,6 +229,7 @@ alert_show() {
   alert_show_line "low space after" "$(fmt_minutes "$(alert_get ALERT_LOWSPACE "$ALERT_DEFAULT_LOWSPACE")")"
   alert_show_line "conflicts after" "$(fmt_minutes "$(alert_get ALERT_CONFLICTS "$ALERT_DEFAULT_CONFLICTS")")"
   alert_show_line "reboot after" "$(fmt_minutes "$(alert_get ALERT_REBOOT "$ALERT_DEFAULT_REBOOT")")"
+  alert_show_line "gw reboot after" "$(fmt_minutes "$(alert_get ALERT_GWREBOOT "$ALERT_DEFAULT_GWREBOOT")")"
   sh_rem=$(alert_get ALERT_REMINDER "$ALERT_DEFAULT_REMINDER")
   if [ "$sh_rem" = off ]; then
     alert_show_line "daily reminder" "off"
@@ -221,6 +237,12 @@ alert_show() {
     alert_show_line "daily reminder" "$(fmt_hour "$sh_rem")"
   fi
   alert_show_line "recovery messages" "$(alert_get ALERT_RECOVERED "$ALERT_DEFAULT_RECOVERED")"
+  sh_hb=$(alert_get ALERT_HEARTBEAT "")
+  if [ -n "$sh_hb" ]; then
+    alert_show_line "heartbeat" "on ($(printf '%s' "$sh_hb" | sed 's#^https\{0,1\}://\([^/]*\).*#\1#'))"
+  else
+    alert_show_line "heartbeat" "off"
+  fi
 }
 
 alert_send() {
@@ -240,17 +262,46 @@ alert_send() {
   esac
 }
 
+heartbeat_ping() {
+  hp_url=$(alert_get ALERT_HEARTBEAT "")
+  [ -n "$hp_url" ] || return 1
+  printf 'url = "%s"\n' "$hp_url" | curl -fsS -K - --max-time 15 --retry 2 -o /dev/null 2> /dev/null
+}
+
+run_heartbeat() {
+  [ -n "$(alert_get ALERT_HEARTBEAT "")" ] || return 0
+  st_api GET /rest/system/ping > /dev/null 2>&1 || return 1
+  heartbeat_ping || {
+    log ERROR "heartbeat could not be sent"
+    return 1
+  }
+}
+
 alert_test() {
-  if [ -z "$(alert_get ALERT_URL "")" ]; then
-    log ERROR "no alert address set, use: tinycloud-gw alert set url ADDRESS"
+  at_url=$(alert_get ALERT_URL "")
+  at_hb=$(alert_get ALERT_HEARTBEAT "")
+  if [ -z "$at_url" ] && [ -z "$at_hb" ]; then
+    log ERROR "nothing is set up, use: tinycloud-gw alert set url ADDRESS"
     return 1
   fi
-  if alert_send "TinyCloud test alert from $(hostname)"; then
-    echo "sent"
-  else
-    log ERROR "could not send, check the address"
-    return 1
+  at_rc=0
+  if [ -n "$at_url" ]; then
+    if alert_send "TinyCloud test alert from $(hostname)"; then
+      echo "sent"
+    else
+      log ERROR "could not send, check the address"
+      at_rc=1
+    fi
   fi
+  if [ -n "$at_hb" ]; then
+    if heartbeat_ping; then
+      echo "heartbeat sent"
+    else
+      log ERROR "heartbeat could not be sent, check the address"
+      at_rc=1
+    fi
+  fi
+  return "$at_rc"
 }
 
 alert_text() {
@@ -260,6 +311,7 @@ alert_text() {
     lowspace) printf '%s (%s) is low on space' "$2" "$3" ;;
     conflicts) printf '%s (%s) has file name conflicts' "$2" "$3" ;;
     reboot) printf '%s (%s) needs a reboot' "$2" "$3" ;;
+    gwreboot) printf 'The gateway needs a reboot' ;;
   esac
 }
 
@@ -270,6 +322,7 @@ alert_cleared_text() {
     lowspace) printf '%s (%s) has enough space again' "$2" "$3" ;;
     conflicts) printf '%s (%s) has no more name conflicts' "$2" "$3" ;;
     reboot) printf '%s (%s) was rebooted' "$2" "$3" ;;
+    gwreboot) printf 'The gateway was rebooted' ;;
   esac
 }
 
@@ -279,7 +332,7 @@ ALERT_JQ='
   | $in.cfg as $cfg
   | $in.now as $now
   | $in.view.nodes as $nodes
-  | ($nodes | map(.name)) as $names
+  | (($nodes | map(.name)) + ["gateway"]) as $names
   | ($nodes | map(select(.online == null) | .name)) as $unknown
   | ([ $nodes[] | . as $n
       | ( (if $n.online == false then [{kind: "offline", delay: $cfg.offline}] else [] end)
@@ -289,7 +342,9 @@ ALERT_JQ='
         + (if $n.status != null and $n.status.low_space == true then [{kind: "lowspace", delay: $cfg.lowspace}] else [] end)
         + (if $n.status != null and ($n.status.case_conflicts // 0) > 0 then [{kind: "conflicts", delay: $cfg.conflicts}] else [] end)
         + (if $n.status != null and $n.status.reboot_required == true then [{kind: "reboot", delay: $cfg.reboot}] else [] end) )
-      | map(. + {name: $n.name, owner: $n.owner, key: "\($n.name):\(.kind)"}) ] | add // []) as $conds
+      | map(. + {name: $n.name, owner: $n.owner, key: "\($n.name):\(.kind)"}) ] | add // []) as $nodeconds
+  | ((if $in.gwage >= 0 and $in.gwage >= $cfg.gwreboot then [{kind: "gwreboot", delay: 0, name: "gateway", owner: "gateway", key: "gateway:gwreboot"}] else [] end)) as $gwconds
+  | ($nodeconds + $gwconds) as $conds
   | ($conds | map(.key)) as $keys
   | $in.state.p as $old
   | ([ $old | to_entries[]
@@ -340,10 +395,17 @@ run_alerts() {
   ra_view=$(jq -c '.' "$GW_STATE/view.json" 2> /dev/null) || return 0
   ra_state=$(jq -c 'select(.p | type == "object")' "$(alert_state_file)" 2> /dev/null)
   [ -n "$ra_state" ] || ra_state='{"p":{}}'
+  ra_gwage=-1
+  ra_rf=${ALERT_REBOOT_FILE:-/var/run/reboot-required}
+  if [ -e "$ra_rf" ]; then
+    ra_gwage=$(((ra_now - $(stat -c %Y "$ra_rf" 2> /dev/null || echo "$ra_now")) / 60))
+    [ "$ra_gwage" -ge 0 ] || ra_gwage=0
+  fi
   ra_rec=true
   [ "$(alert_get ALERT_RECOVERED "$ALERT_DEFAULT_RECOVERED")" = yes ] || ra_rec=false
   ra_out=$(jq -nc --argjson view "$ra_view" --argjson state "$ra_state" --argjson now "$ra_now" \
-    --argjson hour "$ra_hour" \
+    --argjson hour "$ra_hour" --argjson gwage "$ra_gwage" \
+    --argjson gwreboot "$(alert_get ALERT_GWREBOOT "$ALERT_DEFAULT_GWREBOOT")" \
     --argjson offline "$(alert_get ALERT_OFFLINE "$ALERT_DEFAULT_OFFLINE")" \
     --argjson nostatus "$(alert_get ALERT_NOSTATUS "$ALERT_DEFAULT_NOSTATUS")" \
     --argjson lowspace "$(alert_get ALERT_LOWSPACE "$ALERT_DEFAULT_LOWSPACE")" \
@@ -351,7 +413,7 @@ run_alerts() {
     --argjson reboot "$(alert_get ALERT_REBOOT "$ALERT_DEFAULT_REBOOT")" \
     --arg reminder "$(alert_get ALERT_REMINDER "$ALERT_DEFAULT_REMINDER")" \
     --argjson recovered "$ra_rec" \
-    "{view: \$view, state: \$state, now: \$now, hour: \$hour, cfg: {offline: \$offline, nostatus: \$nostatus, lowspace: \$lowspace, conflicts: \$conflicts, reboot: \$reboot, reminder: \$reminder, recovered: \$recovered}} | $ALERT_JQ") || {
+    "{view: \$view, state: \$state, now: \$now, hour: \$hour, gwage: \$gwage, cfg: {gwreboot: \$gwreboot, offline: \$offline, nostatus: \$nostatus, lowspace: \$lowspace, conflicts: \$conflicts, reboot: \$reboot, reminder: \$reminder, recovered: \$recovered}} | $ALERT_JQ") || {
     log ERROR "alerts could not read the status view"
     return 1
   }
