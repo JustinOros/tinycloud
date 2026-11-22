@@ -368,15 +368,24 @@ cat "$SANDBOX/fs.part" >> "$SANDBOX/hl.img"
 printf '\200\000\000\000\203\000\000\000\000\010\000\000\000\040\000\000' > "$SANDBOX/ent"
 dd if="$SANDBOX/ent" of="$SANDBOX/hl.img" bs=1 seek=446 conv=notrunc 2> /dev/null
 printf '\125\252' | dd of="$SANDBOX/hl.img" bs=1 seek=510 conv=notrunc 2> /dev/null
+od() { command od "$@"; echo; }
+assert_eq "le_value ignores extra blank lines" 2048 "$(le_value "$SANDBOX/hl.img" 454 4)"
+unset -f od
 DEBUGFS=$(command -v debugfs)
+assert_eq "ed25519 key accepted" 0 "$(valid_ssh_key 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc user@host'; echo $?)"
+assert_eq "rsa key accepted" 0 "$(valid_ssh_key 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQ'; echo $?)"
+assert_eq "junk refused" 1 "$(valid_ssh_key 'hello world'; echo $?)"
+assert_eq "quote injection refused" 1 "$(valid_ssh_key "ssh-ed25519 AAAA'; rm -rf /; '"; echo $?)"
 assert_eq "root offset found" 1048576 "$(find_root_offset "$SANDBOX/hl.img")"
-P_ENABLED=true; P_SSID=Net; P_WIFIKEY=secretkey1; P_USER=justin; P_PASS=hunter22x; P_TZ=UTC; P_COUNTRY=US; P_GITHUB=
+P_ENABLED=true; P_SSID=Net; P_WIFIKEY=secretkey1; P_USER=justin; P_PASS=hunter22x; P_TZ=UTC; P_COUNTRY=US; P_GITHUB=; P_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc'
 IMG_FILE=$SANDBOX/hl.img
 need_debugfs() { return 0; }
 apply_preset > "$SANDBOX/out" 2>&1
 assert_eq "preset applied" 0 "$?"
 assert_contains "image copy used" "$IMG_FILE" "headless.img"
 assert_contains "preset readable from image" "$(debugfs -R 'cat /root/.not_logged_in_yet' "$IMG_FILE?offset=1048576" 2> /dev/null)" 'PRESET_USER_NAME="justin"'
+assert_contains "provisioning script in image" "$(debugfs -R 'cat /root/provisioning.sh' "$IMG_FILE?offset=1048576" 2> /dev/null)" "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc"
+assert_eq "provisioning script is valid sh" 0 "$(debugfs -R 'cat /root/provisioning.sh' "$IMG_FILE?offset=1048576" 2> /dev/null | sh -n; echo $?)"
 assert_eq "original image untouched" 0 "$(debugfs -R 'stat /root/.not_logged_in_yet' "$SANDBOX/hl.img?offset=1048576" 2>&1 | grep -c 'Type: regular')"
 cleanup
 assert_eq "copy cleaned up" 1 "$([ -e "$TC_FLASH_DIR/headless.img" ]; echo $?)"

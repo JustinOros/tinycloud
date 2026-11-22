@@ -15,6 +15,8 @@ BLOCK=1048576
 BIG_DISK_BYTES=512000000000
 PRESET_COPY=
 PRESET_TMP=
+P_KEY=
+PROV_TMP=
 
 say() {
   printf '%s\n' "$*"
@@ -77,6 +79,7 @@ parse_args() {
 cleanup() {
   [ -n "${PRESET_COPY:-}" ] && rm -f "$PRESET_COPY"
   [ -n "${PRESET_TMP:-}" ] && rm -f "$PRESET_TMP"
+  [ -n "${PROV_TMP:-}" ] && rm -f "$PROV_TMP"
   return 0
 }
 
@@ -661,13 +664,45 @@ collect_headless() {
   fi
   ask_value "Timezone" "$(default_timezone)" '^[A-Za-z0-9_+/-]{1,64}$' "That does not look like a timezone, like America/Phoenix." || return 1
   P_TZ=$VALUE
-  ask_value "GitHub username for your SSH key (blank to skip)" "" '^$|^[A-Za-z0-9-]{1,39}$' "Use a GitHub username." || return 1
-  P_GITHUB=$VALUE
-  if [ -n "$P_GITHUB" ] && ! github_key_exists "$P_GITHUB"; then
-    say "Warning: no public SSH key found at https://github.com/$P_GITHUB.keys, so the board will not get one."
-    P_GITHUB=
-  fi
+  ask_ssh_key || return 1
   P_ENABLED=true
+}
+
+valid_ssh_key() {
+  printf '%s' "$1" | grep -Eq '^(ssh-(ed25519|rsa|dss)|ecdsa-sha2-nistp[0-9]+|sk-[a-z0-9@.-]+) [A-Za-z0-9+/=]+( [ -~]*)?$'
+}
+
+ask_ssh_key() {
+  P_GITHUB=
+  P_KEY=
+  ak_try=0
+  while [ "$ak_try" -lt 3 ]; do
+    ak_try=$((ak_try + 1))
+    printf 'SSH key: [g] GitHub username, [p] paste a public key, [s] skip [s]: '
+    read -r ak_mode || return 1
+    case $ak_mode in
+      '' | [Ss]) return 0 ;;
+      [Gg])
+        ask_value "GitHub username" "" '^[A-Za-z0-9-]{1,39}$' "Use a GitHub username." || return 1
+        if github_key_exists "$VALUE"; then
+          P_GITHUB=$VALUE
+          return 0
+        fi
+        say "No public SSH key found at https://github.com/$VALUE.keys"
+        ;;
+      [Pp])
+        printf 'Paste your public key (one line, starts with ssh-ed25519 or ssh-rsa): '
+        read -r ak_line || return 1
+        if valid_ssh_key "$ak_line"; then
+          P_KEY=$(printf '%s' "$ak_line" | cut -d ' ' -f 1,2)
+          return 0
+        fi
+        say "That does not look like a public key. Paste the contents of your .pub file."
+        ;;
+      *) say "Type g, p, or s." ;;
+    esac
+  done
+  say "Skipping the SSH key."
 }
 
 github_key_exists() {
@@ -704,12 +739,24 @@ render_preset() {
   fi
 }
 
+render_provisioning() {
+  printf '#!/bin/sh\n'
+  printf "u='%s'\n" "$P_USER"
+  printf "k='%s'\n" "$P_KEY"
+  printf 'if [ -d "/home/$u" ]; then d=/home/$u; o=$u; else d=/root; o=root; fi\n'
+  printf 'mkdir -p "$d/.ssh"\n'
+  printf 'printf "%%s\\n" "$k" >> "$d/.ssh/authorized_keys"\n'
+  printf 'chmod 700 "$d/.ssh"\n'
+  printf 'chmod 600 "$d/.ssh/authorized_keys"\n'
+  printf 'chown -R "$o:$(id -gn "$o")" "$d/.ssh"\n'
+}
+
 byte_at() {
   dd if="$1" bs=1 skip="$2" count=1 2> /dev/null | od -An -v -tu1 | tr -d ' \n'
 }
 
 le_value() {
-  dd if="$1" bs=1 skip="$2" count="$3" 2> /dev/null | od -An -v -tu1 | awk '{ v = 0; for (i = NF; i >= 1; i--) v = v * 256 + $i; printf "%.0f", v }'
+  dd if="$1" bs=1 skip="$2" count="$3" 2> /dev/null | od -An -v -tu1 | awk 'NF { v = 0; for (i = NF; i >= 1; i--) v = v * 256 + $i; printf "%.0f", v }'
 }
 
 partition_offsets() {
@@ -776,6 +823,21 @@ apply_preset() {
   "$DEBUGFS" -w -R "sif /root/.not_logged_in_yet mode 0100600" "$ap_target" > /dev/null 2>&1
   "$DEBUGFS" -w -R "sif /root/.not_logged_in_yet uid 0" "$ap_target" > /dev/null 2>&1
   "$DEBUGFS" -w -R "sif /root/.not_logged_in_yet gid 0" "$ap_target" > /dev/null 2>&1
+  if [ -n "$P_KEY" ]; then
+    PROV_TMP=$WORK_DIR/.prov.tmp
+    render_provisioning > "$PROV_TMP"
+    "$DEBUGFS" -w -R "rm /root/provisioning.sh" "$ap_target" > /dev/null 2>&1
+    "$DEBUGFS" -w -R "write $PROV_TMP /root/provisioning.sh" "$ap_target" > /dev/null 2>&1
+    "$DEBUGFS" -w -R "sif /root/provisioning.sh mode 0100700" "$ap_target" > /dev/null 2>&1
+    "$DEBUGFS" -w -R "sif /root/provisioning.sh uid 0" "$ap_target" > /dev/null 2>&1
+    "$DEBUGFS" -w -R "sif /root/provisioning.sh gid 0" "$ap_target" > /dev/null 2>&1
+    if ! "$DEBUGFS" -R "cat /root/provisioning.sh" "$ap_target" 2> /dev/null | cmp -s - "$PROV_TMP"; then
+      rm -f "$PROV_TMP"
+      fail "the SSH key did not end up in the image"
+      return 1
+    fi
+    rm -f "$PROV_TMP"
+  fi
   if ! "$DEBUGFS" -R "cat /root/.not_logged_in_yet" "$ap_target" 2> /dev/null | cmp -s - "$PRESET_TMP"; then
     fail "the settings did not end up in the image"
     return 1
