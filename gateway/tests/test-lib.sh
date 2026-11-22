@@ -69,4 +69,8 @@ assert_eq "time 12h noon" "12:00 PM" "$(time_12h 12:00)"
 assert_eq "valid reboot time" 0 "$(valid_reboot_time 4am; echo $?)"
 assert_eq "invalid reboot time" 1 "$(valid_reboot_time never > /dev/null 2>&1; echo $?)"
 
+assert_eq "valid time zone" 0 "$(valid_timezone America/Phoenix; echo $?)"
+assert_eq "unknown time zone" 1 "$(valid_timezone Nope/Zone > /dev/null 2>&1; echo $?)"
+assert_eq "time zone with junk" 1 "$(valid_timezone 'America/Phoenix; ls' > /dev/null 2>&1; echo $?)"
+
 finish

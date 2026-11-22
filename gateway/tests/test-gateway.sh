@@ -29,6 +29,12 @@ out=$(GW_OS_RELEASE=$HERE/fixtures/debian12 sh "$GW/gateway.sh" --dry-run 2>&1 |
 assert_contains "host required" "$out" "--host is missing or invalid"
 out=$(GW_OS_RELEASE=$HERE/fixtures/debian12 sh "$GW/gateway.sh" --dry-run --host gw.example.com --auto-reboot yes --reboot-time 9pm 2>&1 || true)
 assert_contains "reboot flags accepted" "$out" "dry run finished, nothing changed"
+out=$(GW_OS_RELEASE=$HERE/fixtures/debian12 sh "$GW/gateway.sh" --dry-run --host gw.example.com --timezone Pacific/Honolulu 2>&1 || true)
+assert_contains "time zone is set" "$out" "timedatectl set-timezone Pacific/Honolulu"
+out=$(GW_OS_RELEASE=$HERE/fixtures/debian12 sh "$GW/gateway.sh" --dry-run --host gw.example.com --timezone Nope/Zone 2>&1 || true)
+assert_contains "bad time zone refused" "$out" "--timezone is invalid"
+out=$(GW_OS_RELEASE=$HERE/fixtures/debian12 sh "$GW/gateway.sh" --dry-run --host gw.example.com 2>&1 || true)
+assert_not_contains "no time zone change by default" "$out" "set-timezone"
 out=$(GW_OS_RELEASE=$HERE/fixtures/debian12 sh "$GW/gateway.sh" --dry-run --host gw.example.com --auto-reboot maybe 2>&1 || true)
 assert_contains "bad auto reboot refused" "$out" "--auto-reboot must be yes or no"
 out=$(GW_OS_RELEASE=$HERE/fixtures/debian12 sh "$GW/gateway.sh" --dry-run --host gw.example.com --reboot-time 99:99 2>&1 || true)

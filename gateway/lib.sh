@@ -180,3 +180,15 @@ time_12h() {
 valid_reboot_time() {
   [ -n "$(time_24h "$1")" ]
 }
+
+valid_timezone() {
+  valid "$1" '^[A-Za-z0-9_/+-]{1,64}$' && [ -f "${GW_ZONEINFO:-/usr/share/zoneinfo}/$1" ]
+}
+
+current_timezone() {
+  ct_tz=$(timedatectl show -p Timezone --value 2> /dev/null)
+  if [ -z "$ct_tz" ]; then
+    ct_tz=$(head -n 1 /etc/timezone 2> /dev/null)
+  fi
+  printf '%s' "${ct_tz:-UTC}"
+}

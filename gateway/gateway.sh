@@ -8,9 +8,10 @@ HOST=
 SSH_PORT=22
 AUTO_REBOOT=no
 REBOOT_TIME=04:00
+TIMEZONE=
 
 usage() {
-  echo "usage: sudo sh gateway.sh --host HOSTNAME [--ssh-port N] [--auto-reboot yes|no] [--reboot-time TIME] [--dry-run]"
+  echo "usage: sudo sh gateway.sh --host HOSTNAME [--ssh-port N] [--auto-reboot yes|no] [--reboot-time TIME] [--timezone NAME] [--dry-run]"
 }
 
 run() {
@@ -58,6 +59,11 @@ parse_args() {
         REBOOT_TIME=$2
         shift 2
         ;;
+      --timezone)
+        [ $# -ge 2 ] || { usage; return 1; }
+        TIMEZONE=$2
+        shift 2
+        ;;
       --dry-run)
         DRY_RUN=true
         shift
@@ -89,6 +95,10 @@ parse_args() {
     return 1
   fi
   REBOOT_TIME=$(time_24h "$REBOOT_TIME")
+  if [ -n "$TIMEZONE" ] && ! valid_timezone "$TIMEZONE"; then
+    log ERROR "--timezone is invalid, use a name like America/Phoenix"
+    return 1
+  fi
 }
 
 check_os() {
@@ -189,6 +199,13 @@ install_docker() {
   run apt-get update
   run env DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
   run systemctl enable --now docker
+}
+
+setup_timezone() {
+  if [ -z "$TIMEZONE" ] || [ "$TIMEZONE" = "$(current_timezone)" ]; then
+    return 0
+  fi
+  run timedatectl set-timezone "$TIMEZONE"
 }
 
 setup_upgrades() {
@@ -299,6 +316,7 @@ main() {
   check_root
   install_packages
   install_docker
+  setup_timezone
   setup_upgrades
   setup_ssh
   setup_fail2ban

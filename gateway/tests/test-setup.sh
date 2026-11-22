@@ -16,7 +16,7 @@ run_setup() {
   GW_OS_RELEASE=$HERE/fixtures/$rs_os SETUP_INPUT=$rs_input sh "$REPO/setup.sh" "$@" 2>&1
 }
 
-printf 'gw.example.com\n\n\n\ny\n' > "$SANDBOX/in1"
+printf 'gw.example.com\n\n\n\n\ny\n' > "$SANDBOX/in1"
 out=$(run_setup debian13 "$SANDBOX/in1" --dry-run)
 assert_contains "banner" "$out" "TinyCloud gateway setup"
 assert_contains "os shown" "$out" "System: debian 13 (trixie)"
@@ -25,18 +25,18 @@ assert_contains "ports in plan" "$out" "22000, 22067, and 8443"
 assert_contains "ssh port default" "$out" "open only ports 22 (SSH)"
 assert_contains "dry run finishes" "$out" "dry run finished, nothing changed"
 
-printf 'gw.example.com\n2222\n\n\ny\n' > "$SANDBOX/in2"
+printf 'gw.example.com\n2222\n\n\n\ny\n' > "$SANDBOX/in2"
 out=$(run_setup ubuntu2404 "$SANDBOX/in2" --dry-run)
 assert_contains "custom ssh port" "$out" "open only ports 2222 (SSH)"
 assert_contains "ubuntu shown" "$out" "System: ubuntu 24.04 (noble)"
 assert_contains "ubuntu docker repo" "$out" "download.docker.com/linux/ubuntu"
 
-printf 'gw.example.com\n\n\n\nn\n' > "$SANDBOX/in3"
+printf 'gw.example.com\n\n\n\n\nn\n' > "$SANDBOX/in3"
 out=$(run_setup debian13 "$SANDBOX/in3" --dry-run)
 assert_contains "declined" "$out" "cancelled"
 assert_not_contains "declined runs nothing" "$out" "dry run finished"
 
-printf 'bad/host\ngw.example.com\n\n\n\ny\n' > "$SANDBOX/in4"
+printf 'bad/host\ngw.example.com\n\n\n\n\ny\n' > "$SANDBOX/in4"
 out=$(run_setup debian13 "$SANDBOX/in4" --dry-run)
 assert_contains "bad host explained" "$out" "not a valid hostname"
 assert_contains "good host after retry" "$out" "Hostname: gw.example.com"
@@ -45,17 +45,31 @@ printf 'a/b\nc/d\ne/f\n' > "$SANDBOX/in5"
 out=$(run_setup debian13 "$SANDBOX/in5" --dry-run)
 assert_contains "gives up after three bad hosts" "$out" "no valid hostname"
 
-printf 'gw.example.com\n\n\n9pm\ny\n' > "$SANDBOX/in7"
+printf 'gw.example.com\n\n\n\n9pm\ny\n' > "$SANDBOX/in7"
 out=$(run_setup debian13 "$SANDBOX/in7" --dry-run)
 assert_contains "custom reboot time planned" "$out" "reboot at 9:00 PM when an update needs it"
-printf 'gw.example.com\n\n\nnever\n5am\ny\n' > "$SANDBOX/in8"
+printf 'gw.example.com\n\n\n\nnever\n5am\ny\n' > "$SANDBOX/in8"
 out=$(run_setup debian13 "$SANDBOX/in8" --dry-run)
 assert_contains "bad reboot time explained" "$out" "not a valid time"
 assert_contains "reboot time after retry" "$out" "reboot at 5:00 AM when an update needs it"
-printf 'gw.example.com\n\nn\ny\n' > "$SANDBOX/in9"
+printf 'gw.example.com\n\n\nn\ny\n' > "$SANDBOX/in9"
 out=$(run_setup debian13 "$SANDBOX/in9" --dry-run)
 assert_contains "no auto reboot planned" "$out" "not reboot automatically"
 assert_not_contains "no reboot time asked" "$out" "Reboot time"
+printf 'gw.example.com\n\nPacific/Honolulu\n\n\ny\n' > "$SANDBOX/in10"
+out=$(run_setup debian13 "$SANDBOX/in10" --dry-run)
+assert_contains "time zone change planned" "$out" "set the server time zone to Pacific/Honolulu"
+assert_contains "time zone applied" "$out" "timedatectl set-timezone Pacific/Honolulu"
+printf 'gw.example.com\n\nNope/Zone\nPacific/Honolulu\n\n\ny\n' > "$SANDBOX/in11"
+out=$(run_setup debian13 "$SANDBOX/in11" --dry-run)
+assert_contains "bad time zone explained" "$out" "not a time zone on this server"
+assert_contains "time zone after retry" "$out" "set the server time zone to Pacific/Honolulu"
+out=$(run_setup debian13 /dev/null --dry-run --yes --host gw.example.com)
+assert_not_contains "yes mode keeps the time zone" "$out" "set the server time zone"
+out=$(run_setup debian13 /dev/null --dry-run --yes --host gw.example.com --timezone Pacific/Honolulu)
+assert_contains "time zone flag" "$out" "set the server time zone to Pacific/Honolulu"
+out=$(run_setup debian13 /dev/null --dry-run --yes --host gw.example.com --timezone Nope/Zone)
+assert_contains "bad time zone flag refused" "$out" "no valid time zone"
 out=$(run_setup debian13 /dev/null --dry-run --yes --host gw.example.com --auto-reboot no)
 assert_contains "flag turns reboot off" "$out" "not reboot automatically"
 out=$(run_setup debian13 /dev/null --dry-run --yes --host gw.example.com --auto-reboot maybe)
@@ -83,7 +97,7 @@ assert_contains "debian 11 refused" "$out" "unsupported system"
 
 mkdir -p "$GW_HOME"
 printf 'GATEWAY_HOST=old.example.com\nRELAY_TOKEN=x\n' > "$GW_HOME/.env"
-printf '\n\n\n\ny\n' > "$SANDBOX/in6"
+printf '\n\n\n\n\ny\n' > "$SANDBOX/in6"
 out=$(run_setup debian13 "$SANDBOX/in6" --dry-run)
 assert_contains "existing host is the default" "$out" "Hostname: old.example.com"
 assert_contains "existing install noted" "$out" "keep the existing gateway identity"

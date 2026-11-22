@@ -10,6 +10,7 @@ HOST=
 SSH_PORT=
 AUTO_REBOOT=
 REBOOT_TIME=
+TZ_NAME=
 ASSUME_YES=false
 DRY_RUN=false
 SRC=
@@ -66,7 +67,7 @@ ask_yes() {
 }
 
 usage() {
-  say "usage: sh setup.sh [--host HOSTNAME] [--ssh-port N] [--auto-reboot yes|no] [--reboot-time TIME] [--yes] [--dry-run]"
+  say "usage: sh setup.sh [--host HOSTNAME] [--ssh-port N] [--auto-reboot yes|no] [--reboot-time TIME] [--timezone NAME] [--yes] [--dry-run]"
 }
 
 parse_args() {
@@ -90,6 +91,11 @@ parse_args() {
       --reboot-time)
         [ $# -ge 2 ] || { usage; return 1; }
         REBOOT_TIME=$2
+        shift 2
+        ;;
+      --timezone)
+        [ $# -ge 2 ] || { usage; return 1; }
+        TZ_NAME=$2
         shift 2
         ;;
       --yes)
@@ -270,6 +276,30 @@ choose_ssh_port() {
   valid_port "$SSH_PORT" || fail "bad SSH port"
 }
 
+choose_timezone() {
+  ctz_now=$(current_timezone)
+  if [ -z "$TZ_NAME" ] && [ "$ASSUME_YES" = true ]; then
+    TZ_NAME=$ctz_now
+  fi
+  ctz_try=0
+  while [ "$ctz_try" -lt 3 ]; do
+    if [ -z "$TZ_NAME" ]; then
+      ask_value "Time zone for this server (reboots and daily alerts use it, like America/Phoenix)" "$ctz_now" || return 1
+      TZ_NAME=$ANSWER
+    fi
+    if valid_timezone "$TZ_NAME"; then
+      return 0
+    fi
+    say "That is not a time zone on this server. Use a name like America/Phoenix."
+    TZ_NAME=
+    if [ "$ASSUME_YES" = true ]; then
+      break
+    fi
+    ctz_try=$((ctz_try + 1))
+  done
+  fail "no valid time zone"
+}
+
 choose_reboot() {
   case $AUTO_REBOOT in
     '' | yes | no) ;;
@@ -311,6 +341,9 @@ show_plan() {
   say "  - install Docker, fail2ban, nftables, and automatic security updates"
   say "  - start the Syncthing, relay, and discovery services"
   say "  - open only ports $SSH_PORT (SSH), 22000, 22067, and 8443"
+  if [ "$TZ_NAME" != "$(current_timezone)" ]; then
+    say "  - set the server time zone to $TZ_NAME"
+  fi
   if [ "$AUTO_REBOOT" = yes ]; then
     say "  - reboot at $(time_12h "$REBOOT_TIME") when an update needs it"
   else
@@ -331,7 +364,7 @@ show_plan() {
 }
 
 run_install() {
-  set -- --host "$HOST" --ssh-port "$SSH_PORT" --auto-reboot "$AUTO_REBOOT"
+  set -- --host "$HOST" --ssh-port "$SSH_PORT" --auto-reboot "$AUTO_REBOOT" --timezone "$TZ_NAME"
   if [ "$AUTO_REBOOT" = yes ]; then
     set -- "$@" --reboot-time "$REBOOT_TIME"
   fi
@@ -372,6 +405,7 @@ main() {
   choose_host || return 1
   check_dns "$HOST"
   choose_ssh_port || return 1
+  choose_timezone || return 1
   choose_reboot || return 1
   show_plan
   if ! ask_yes "Continue?" y; then

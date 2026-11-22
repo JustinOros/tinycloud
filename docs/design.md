@@ -60,7 +60,7 @@ Nobody ever auto-accepts a folder or a device. The introducer feature is never u
 - A nightly timer updates TinyCloud itself from the `stable` branch (default), from `main` (testing), or not at all.
 - An update that leaves Syncthing, the agent or the web page unhealthy is rolled back from a saved copy.
 - Publish a release with `git push origin main:stable`.
-- The gateway asks the same reboot question during `setup.sh` (default yes, at 4:00 AM). If it does not reboot automatically, an alert says when a reboot has been waiting too long.
+- The gateway asks the same reboot question during `setup.sh` (default yes, at 4:00 AM), and which time zone the server uses, because reboots and the daily alert reminder follow its clock. If it does not reboot automatically, an alert says when a reboot has been waiting too long.
 
 ## Joining
 
