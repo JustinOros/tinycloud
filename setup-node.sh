@@ -756,7 +756,14 @@ user_home() {
   getent passwd "$1" 2> /dev/null | cut -d : -f 6
 }
 
+first_normal_user() {
+  getent passwd 2> /dev/null | awk -F: '$3 >= 1000 && $3 < 60000 && $7 !~ /(nologin|false)$/ {print $1; exit}'
+}
+
 setup_user() {
+  if [ -z "$TARGET_USER" ] || [ "$TARGET_USER" = root ]; then
+    TARGET_USER=$(first_normal_user)
+  fi
   if [ -z "$TARGET_USER" ] || [ "$TARGET_USER" = root ]; then
     return 0
   fi
