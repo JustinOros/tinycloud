@@ -242,6 +242,8 @@ A node shows a warning when it is offline, low on space, has name conflicts, has
 - `tinycloud-gw approve` works against a real Syncthing.
 - The aggregator and dashboard work on the real gateway.
 - A shared folder of epubs syncs from a Docker node on Unraid to an Orange Pi on another network.
+- Offline and resolved alerts reach a real Discord webhook, with the wait time set by the owner.
+- The heartbeat pings healthchecks.io, which posts to Discord.
 
 ## Still to verify
 
@@ -250,6 +252,8 @@ A node shows a warning when it is offline, low on space, has name conflicts, has
 - Min free space and pull order behave on a nearly full card.
 - Gateway RAM stays fine on 1 GB.
 - No secret in any log or support bundle.
-- Alerts reach a real Discord webhook and a real ntfy topic.
+- Alerts reach a real ntfy topic.
+- The gateway reboot alert on a real server.
+- A missed heartbeat reaches Discord.
 - Everything works on Ubuntu as well as Debian.
 - `tinycloud-gw remove` against a real Syncthing.
