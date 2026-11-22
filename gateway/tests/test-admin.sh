@@ -394,6 +394,27 @@ assert_eq "offline node has no uptime" 0 "$(row down | grep -c 'days')"
 assert_eq "node without booted shows a dash" 1 "$(row legacy | awk '{print $5}' | grep -c '^-$')"
 
 reset
+printf 'yes\n' | cmd_approve rocky "$N1" reader justin > /dev/null 2>&1
+printf '{"connections":{"%s":{"connected":true}}}' "$N1" > "$FAKE/connections.json"
+WOUT=$SANDBOX/watch.out
+GW_WATCH_INTERVAL=1 cmd_status --watch > "$WOUT" 2>&1 &
+watch_pid=$!
+sleep 1
+printf '{"connections":{"%s":{"connected":false}}}' "$N1" > "$FAKE/connections.json"
+sleep 3
+kill "$watch_pid" 2> /dev/null
+wait "$watch_pid" 2> /dev/null
+wo=$(cat "$WOUT")
+assert_contains "watch shows the node online first" "$wo" "Online"
+assert_contains "watch picks up the node going offline" "$wo" "Offline"
+assert_contains "watch clears the screen" "$wo" "$(printf '\033[H\033[2J')"
+assert_contains "watch says how to stop" "$wo" "Ctrl+C"
+assert_contains "watch states the interval" "$wo" "every 1 seconds"
+assert_eq "watch output has no color when not a terminal" 0 "$(printf '%s' "$wo" | grep -c "$(printf '\033')\[3")"
+rm -rf "$GW_STATE/.lock"
+assert_contains "help lists watch" "$(usage)" "--watch"
+
+reset
 printf '{"connections":null}' > "$FAKE/connections.json"
 printf 'yes\n' | cmd_approve rocky "$N1" reader justin > /dev/null 2>&1
 cmd_aggregate

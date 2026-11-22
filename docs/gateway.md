@@ -48,7 +48,7 @@ sh dashboard/tinycloud-dashboard root@gw.example.com
 
 It prints a table of every node: online or offline, space, warnings. Add `--watch` to keep it updating every minute until you press Ctrl+C. Add `--web` to get a page in your browser instead.
 
-On the gateway itself, `tinycloud-gw status` prints the same table.
+On the gateway itself, `tinycloud-gw status` prints the same table. Add `--watch` to keep it updating every 10 seconds, with a fresh online check each time.
 
 ## Change the relay token
 

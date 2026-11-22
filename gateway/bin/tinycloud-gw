@@ -21,7 +21,7 @@ usage: tinycloud-gw COMMAND
   config                                     show the lines every node needs
   aggregate                                  rebuild the status views
   view                                       print the full status view as JSON
-  status [--color]                           print a table of nodes and their status
+  status [--watch]                           print a table of nodes, --watch keeps it updating
   backup                                     save the gateway identity
   restore FILE [--yes]                       restore a saved identity
   rotate-token [--yes]                       make a new relay token
@@ -435,18 +435,40 @@ render_status() {
     }'
 }
 
+status_once() {
+  so_view=$(cmd_view) || return 1
+  render_status "$so_view" "$1"
+}
+
+watch_status() {
+  ws_wait=${GW_WATCH_INTERVAL:-10}
+  while true; do
+    cmd_aggregate > /dev/null 2>&1
+    ws_out=$(status_once "$1") || ws_out="Could not read the status view."
+    printf '\033[H\033[2J%s\n\nRefreshing every %s seconds. Press Ctrl+C to stop.\n' "$ws_out" "$ws_wait"
+    sleep "$ws_wait"
+  done
+}
+
 cmd_status() {
   cs_color=0
-  case ${1:-} in
-    --color) cs_color=1 ;;
-    '') ;;
-    *)
-      usage
-      return 1
-      ;;
-  esac
-  cs_view=$(cmd_view) || return 1
-  render_status "$cs_view" "$cs_color"
+  cs_watch=0
+  for cs_arg in "$@"; do
+    case $cs_arg in
+      --color) cs_color=1 ;;
+      --watch) cs_watch=1 ;;
+      *)
+        usage
+        return 1
+        ;;
+    esac
+  done
+  if [ "$cs_watch" = 1 ]; then
+    [ -t 1 ] && cs_color=1
+    watch_status "$cs_color"
+    return $?
+  fi
+  status_once "$cs_color"
 }
 
 cmd_config() {
