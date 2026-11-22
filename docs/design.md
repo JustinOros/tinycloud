@@ -209,10 +209,11 @@ A node shows a warning when it is offline, low on space, has name conflicts, has
 - Sync works both ways through the relay, between a Docker node on Unraid and an Orange Pi on another network.
 - The relay token works.
 - `tinycloud-gw approve` works against a real Syncthing.
+- The aggregator and dashboard work on the real gateway.
+- A shared folder of epubs syncs from a Docker node on Unraid to an Orange Pi on another network.
 
 ## Still to verify
 
-- The aggregator and dashboard on the real gateway.
 - The firewall on a Pi, open only to the gateway.
 - Nodes on the same LAN do not try direct connections.
 - Min free space and pull order behave on a nearly full card.
@@ -220,11 +221,3 @@ A node shows a warning when it is offline, low on space, has name conflicts, has
 - No secret in any log or support bundle.
 - Everything works on Ubuntu as well as Debian.
 - `tinycloud-gw remove` against a real Syncthing.
-
-## Build order
-
-1. Node stack: Syncthing, agent, status page, firewall, doctor. Done.
-2. Docker node. Done.
-3. Gateway and aggregator. Done.
-4. Approval commands. Done.
-5. Test with rocky, grace, and Finn's Linode. Grace and a Docker node are done.
