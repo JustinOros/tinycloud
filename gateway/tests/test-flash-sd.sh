@@ -44,6 +44,20 @@ run_flash() {
 }
 
 reset_state
+VERIFY_BLOCKS=1
+run_flash --image "$SANDBOX/os.img" --disk fake1 --yes
+assert_contains "verify shows progress" "$OUT" "100%"
+assert_eq "chunked verify passes" 0 "$RC"
+head -c 3000000 /dev/urandom > "$SANDBOX/os2.img"
+dd if="$SANDBOX/os.img" of="$FAKE_CARD" bs=1048576 conv=notrunc 2> /dev/null
+printf 'X' | dd of="$FAKE_CARD" bs=1 seek=2500000 conv=notrunc 2> /dev/null
+DISK=fake1
+IMG_FILE=$SANDBOX/os.img
+IMG_SIZE=3000000
+verify_image > "$SANDBOX/out" 2>&1
+assert_eq "corruption in a late chunk caught" 1 "$?"
+VERIFY_BLOCKS=64
+reset_state
 run_flash --image "$SANDBOX/os.img" --disk fake1 --yes
 assert_eq "plain image flashes" 0 "$RC"
 assert_eq "card holds the image" 1 "$(head -c 3000000 "$FAKE_CARD" | cmp -s - "$SANDBOX/os.img" && echo 1 || echo 0)"

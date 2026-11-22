@@ -12,6 +12,7 @@ ASSUME_YES=false
 HEADLESS=ask
 OS=$(uname -s)
 BLOCK=1048576
+VERIFY_BLOCKS=64
 BIG_DISK_BYTES=512000000000
 PRESET_COPY=
 PRESET_TMP=
@@ -416,7 +417,7 @@ dd_write() {
 }
 
 dd_read() {
-  priv dd if="$1" bs=$BLOCK count="$2" 2> /dev/null
+  priv dd if="$1" bs=$BLOCK count="$2" skip="${3:-0}" 2> /dev/null
 }
 
 after_write() {
@@ -899,13 +900,25 @@ write_image() {
 
 verify_image() {
   say "Checking what was written"
-  vi_blocks=$(((IMG_SIZE + BLOCK - 1) / BLOCK))
-  if dd_read "$(raw_path "$DISK")" "$vi_blocks" | head -c "$IMG_SIZE" | cmp -s - "$IMG_FILE"; then
-    say "The card matches the image."
-    return 0
-  fi
-  fail "the card does not match the image. It may be bad. Try another card."
-  return 1
+  vi_total=$(((IMG_SIZE + BLOCK - 1) / BLOCK))
+  vi_done=0
+  while [ "$vi_done" -lt "$vi_total" ]; do
+    vi_n=$((vi_total - vi_done))
+    [ "$vi_n" -gt "$VERIFY_BLOCKS" ] && vi_n=$VERIFY_BLOCKS
+    vi_len=$((IMG_SIZE - vi_done * BLOCK))
+    [ "$vi_len" -gt $((vi_n * BLOCK)) ] && vi_len=$((vi_n * BLOCK))
+    vi_card=$(dd_read "$(raw_path "$DISK")" "$vi_n" "$vi_done" | head -c "$vi_len" | cksum)
+    vi_img=$(dd if="$IMG_FILE" bs=$BLOCK skip="$vi_done" count="$vi_n" 2> /dev/null | head -c "$vi_len" | cksum)
+    if [ "$vi_card" != "$vi_img" ]; then
+      printf '\n'
+      fail "the card does not match the image. It may be bad. Try another card."
+      return 1
+    fi
+    vi_done=$((vi_done + vi_n))
+    printf '\rChecking what was written: %s%%' $((vi_done * 100 / vi_total))
+  done
+  printf '\n'
+  say "The card matches the image."
 }
 
 finish_up() {
