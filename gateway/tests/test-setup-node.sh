@@ -29,15 +29,17 @@ run_setup() {
   rs_os=$1
   rs_input=$2
   shift 2
-  GW_OS_RELEASE=$HERE/fixtures/$rs_os SETUP_INPUT=$rs_input SETUP_USER=tester SETUP_USER_HOME=$SANDBOX/home sh "$REPO/setup-node.sh" "$@" 2>&1
+  PATH=$SANDBOX/fakebin:$PATH GW_OS_RELEASE=$HERE/fixtures/$rs_os SETUP_INPUT=$rs_input SETUP_USER=tester SETUP_USER_HOME=$SANDBOX/home sh "$REPO/setup-node.sh" "$@" 2>&1
 }
 
-mkdir -p "$SANDBOX/home"
+mkdir -p "$SANDBOX/home" "$SANDBOX/fakebin"
+printf '#!/bin/sh\nexit 0\n' > "$SANDBOX/fakebin/dpkg"
+chmod +x "$SANDBOX/fakebin/dpkg"
 
 {
   printf 'adrian\njustin\ncontributor\nAmerica/Phoenix\n'
   cat "$SANDBOX/lines"
-  printf '\ny\n'
+  printf '\ny\ny\n3:00 AM\ny\n'
 } > "$SANDBOX/in1"
 out=$(run_setup debian13 "$SANDBOX/in1" --dry-run)
 assert_contains "banner" "$out" "TinyCloud node setup"
@@ -45,6 +47,8 @@ assert_contains "os shown" "$out" "System: debian 13 (trixie)"
 assert_contains "plan node" "$out" "Node:     adrian (owner justin, role contributor)"
 assert_contains "plan gateway" "$out" "Gateway:  gw.example.com"
 assert_contains "plan timezone" "$out" "Timezone: America/Phoenix"
+assert_contains "plan updates" "$out" "Updates:  automatic security updates, reboot at 3:00 AM when needed"
+assert_contains "updates config planned" "$out" "52tinycloud-unattended"
 assert_contains "dry run finishes" "$out" "dry run finished, nothing changed"
 assert_not_contains "token never printed" "$out" "tok123"
 assert_eq "dry run writes nothing" 0 "$([ -e "$NODE_HOME" ] && echo 1 || echo 0)"
@@ -52,9 +56,20 @@ assert_eq "dry run writes nothing" 0 "$([ -e "$NODE_HOME" ] && echo 1 || echo 0)
 out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role anchor --timezone UTC --config "$SANDBOX/lines")
 assert_contains "yes mode runs" "$out" "dry run finished, nothing changed"
 assert_contains "yes mode role" "$out" "role anchor"
+assert_contains "yes mode leaves updates alone" "$out" "Updates:  not automatic"
 assert_contains "docker compose planned" "$out" "+ docker compose up -d --build"
 assert_contains "command link planned" "$out" "ln -sfn"
 assert_contains "shortcut planned" "$out" "$SANDBOX/home/tinycloud"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --config "$SANDBOX/lines" --auto-update yes --reboot-time 4:30pm)
+assert_contains "flag updates and reboot" "$out" "Updates:  automatic security updates, reboot at 4:30 PM when needed"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --config "$SANDBOX/lines" --auto-update yes --auto-reboot no)
+assert_contains "flag no reboot" "$out" "Updates:  automatic security updates, no automatic reboot"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --config "$SANDBOX/lines" --auto-update no --auto-reboot yes)
+assert_contains "reboot needs updates" "$out" "--auto-reboot needs automatic updates"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --config "$SANDBOX/lines" --auto-update yes --reboot-time 25:00)
+assert_contains "bad reboot time refused" "$out" "bad reboot time"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --config "$SANDBOX/lines" --auto-update maybe)
+assert_contains "bad update flag refused" "$out" "--auto-update must be yes or no"
 
 out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian)
 assert_contains "yes needs config" "$out" "--yes needs --name, --owner, and --config"
@@ -88,24 +103,25 @@ assert_contains "debian 11 refused" "$out" "unsupported system"
   printf 'bad name\nadrian\njustin\nbogus\nreader\nUTC\n'
   printf 'GATEWAY_HOST=gw.example.com\n\n'
   cat "$SANDBOX/lines"
-  printf '\ny\n'
+  printf '\nn\ny\n'
 } > "$SANDBOX/in2"
 out=$(run_setup debian13 "$SANDBOX/in2" --dry-run)
 assert_contains "retries a bad name" "$out" "That is not valid."
 assert_contains "retries incomplete gateway lines" "$out" "GATEWAY_ID is missing or not valid."
 assert_contains "ends with a valid plan" "$out" "Node:     adrian (owner justin, role reader)"
+assert_contains "no auto updates plan" "$out" "Updates:  not automatic"
 
-printf 'adrian\njustin\n2\nUTC\n%s\n\ny\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in4"
+printf 'adrian\njustin\n2\nUTC\n%s\n\nn\ny\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in4"
 out=$(run_setup debian13 "$SANDBOX/in4" --dry-run)
 assert_contains "role menu lists choices" "$out" "2) contributor  sends and receives"
 assert_contains "role number picks the role" "$out" "role contributor"
 
-printf 'adrian\njustin\n9\n\nUTC\n%s\n\ny\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in5"
+printf 'adrian\njustin\n9\n\nUTC\n%s\n\nn\ny\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in5"
 out=$(run_setup debian13 "$SANDBOX/in5" --dry-run)
 assert_contains "bad role number retried" "$out" "That is not valid."
 assert_contains "blank role defaults to reader" "$out" "role reader"
 
-printf 'adrian\njustin\nreader\nUTC\n%s\n\nn\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in3"
+printf 'adrian\njustin\nreader\nUTC\n%s\n\nn\nn\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in3"
 out=$(run_setup debian13 "$SANDBOX/in3" --dry-run)
 assert_contains "declined" "$out" "cancelled"
 assert_not_contains "declined runs nothing" "$out" "dry run finished"
@@ -191,6 +207,61 @@ printf '#!/bin/sh\nexit 1\n' > "$NODE_HOME/bin/tinycloud"
 SETUP_WAIT_TRIES=2
 SETUP_WAIT_SECONDS=0
 assert_eq "wait gives up" 1 "$(wait_join > /dev/null 2>&1 && echo 0 || echo 1)"
+
+assert_eq "3 AM" 03:00 "$(time_24h '3:00 AM')"
+assert_eq "12 AM is midnight" 00:00 "$(time_24h '12:00 AM')"
+assert_eq "12 PM is noon" 12:00 "$(time_24h '12 pm')"
+assert_eq "11:45 PM" 23:45 "$(time_24h '11:45PM')"
+assert_eq "24 hour input" 03:15 "$(time_24h '03:15')"
+assert_eq "bare hour" 04:00 "$(time_24h '4 AM')"
+assert_eq "13 PM refused" 1 "$(time_24h '13:00 PM' > /dev/null && echo 0 || echo 1)"
+assert_eq "bad minutes refused" 1 "$(time_24h '3:75' > /dev/null && echo 0 || echo 1)"
+assert_eq "junk refused" 1 "$(time_24h 'soon' > /dev/null && echo 0 || echo 1)"
+assert_eq "12 hour display" "3:00 AM" "$(time_12h 03:00)"
+assert_eq "noon display" "12:00 PM" "$(time_12h 12:00)"
+assert_eq "midnight display" "12:00 AM" "$(time_12h 00:00)"
+assert_eq "evening display" "4:30 PM" "$(time_12h 16:30)"
+
+os_id=debian
+os_codename=trixie
+AUTO_REBOOT=yes
+REBOOT_TIME=03:00
+assert_contains "debian origin" "$(render_node_unattended)" 'codename=trixie-security,label=Debian-Security'
+assert_contains "reboot on" "$(render_node_unattended)" 'Automatic-Reboot "true"'
+assert_contains "reboot time" "$(render_node_unattended)" 'Automatic-Reboot-Time "03:00"'
+assert_contains "reboot with users" "$(render_node_unattended)" 'Automatic-Reboot-WithUsers "true"'
+AUTO_REBOOT=no
+assert_contains "reboot off" "$(render_node_unattended)" 'Automatic-Reboot "false"'
+assert_not_contains "no time when off" "$(render_node_unattended)" 'Reboot-Time'
+os_id=ubuntu
+os_codename=noble
+assert_contains "ubuntu origin" "$(render_node_unattended)" 'archive=noble-security'
+assert_contains "periodic on" "$(render_node_periodic)" 'Unattended-Upgrade "1"'
+
+DRY_RUN=false
+UPDATE_CONF_DIR=$SANDBOX/aptconf
+dpkg() { return 0; }
+AUTO_UPDATE=no
+setup_updates
+assert_eq "no updates writes nothing" 0 "$([ -e "$UPDATE_CONF_DIR" ] && echo 1 || echo 0)"
+AUTO_UPDATE=yes
+AUTO_REBOOT=yes
+REBOOT_TIME=02:30
+os_id=debian
+os_codename=trixie
+setup_updates
+assert_contains "update conf written" "$(cat "$UPDATE_CONF_DIR/52tinycloud-unattended")" 'Automatic-Reboot-Time "02:30"'
+assert_contains "periodic conf written" "$(cat "$UPDATE_CONF_DIR/20auto-upgrades")" 'Update-Package-Lists "1"'
+assert_eq "conf readable" 644 "$(stat -c %a "$UPDATE_CONF_DIR/52tinycloud-unattended" 2> /dev/null || stat -f %Lp "$UPDATE_CONF_DIR/52tinycloud-unattended")"
+dpkg() { return 1; }
+rm -rf "$UPDATE_CONF_DIR"
+exec 3< /dev/null
+ASSUME_YES=false
+setup_updates > "$SANDBOX/out" 2>&1
+assert_contains "declined install skips updates" "$(cat "$SANDBOX/out")" "Skipping automatic updates."
+assert_eq "declined install writes nothing" 0 "$([ -e "$UPDATE_CONF_DIR" ] && echo 1 || echo 0)"
+exec 3<&-
+unset -f dpkg
 
 exec 3< /dev/null
 ASSUME_YES=false

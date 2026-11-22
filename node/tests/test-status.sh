@@ -47,20 +47,29 @@ assert_eq "big change written" 1 "$(test -f "$STATUS_DIR/status.json" && echo 1 
 setup
 TC_UPTIME_FILE=$SANDBOX/uptime
 export TC_UPTIME_FILE
+TC_PID1_STAT=$SANDBOX/pid1stat
+export TC_PID1_STAT
 printf '3600.50 7000.00\n' > "$TC_UPTIME_FILE"
+printf '1 (a b) c) S 0 1 1 0 -1 4194560 0 0 0 0 0 0 0 0 20 0 1 0 100000 1000 100 18446744073709551615\n' > "$TC_PID1_STAT"
 main > "$FAKE_DIR/out" 2>&1
 booted=$(jq -r '.booted' "$STATUS_DIR/status.json")
 assert_eq "booted is an iso time" 1 "$(printf '%s' "$booted" | grep -Ec '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$')"
 now_s=$(date +%s)
 booted_s=$(date -u -d "$booted" +%s 2> /dev/null || TZ=UTC date -j -f '%Y-%m-%dT%H:%M:%SZ' "$booted" +%s)
-diff=$((now_s - 3600 - booted_s))
-assert_eq "booted matches the uptime" 1 "$([ "$diff" -ge -5 ] && [ "$diff" -le 5 ] && echo 1 || echo 0)"
+diff=$((now_s - 2600 - booted_s))
+assert_eq "booted is the container start, not the host boot" 1 "$([ "$diff" -ge -5 ] && [ "$diff" -le 5 ] && echo 1 || echo 0)"
+printf 'garbage\n' > "$TC_PID1_STAT"
+rm -rf "$STATUS_DIR" "$TC_STATE_DIR"/status.*
+mkdir -p "$TC_STATE_DIR"
+main > "$FAKE_DIR/out" 2>&1
+assert_jq "no booted when pid 1 stat unreadable" "$(cat "$STATUS_DIR/status.json")" 'has("booted") | not'
+printf '1 (a) S 0 1 1 0 -1 4194560 0 0 0 0 0 0 0 0 20 0 1 0 100000 1000\n' > "$TC_PID1_STAT"
 printf 'garbage\n' > "$TC_UPTIME_FILE"
 rm -rf "$STATUS_DIR" "$TC_STATE_DIR"/status.*
 mkdir -p "$TC_STATE_DIR"
 main > "$FAKE_DIR/out" 2>&1
 assert_jq "no booted when uptime unreadable" "$(cat "$STATUS_DIR/status.json")" 'has("booted") | not'
-unset TC_UPTIME_FILE
+unset TC_UPTIME_FILE TC_PID1_STAT
 
 setup
 printf '{"state":"idle","globalBytes":0,"localBytes":0}' > "$FAKE_DIR/dbstatus.json"

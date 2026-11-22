@@ -18,9 +18,13 @@ iso_from_epoch() {
 
 collect_booted() {
   st_booted=
-  cb_up=$(cut -d . -f 1 "${TC_UPTIME_FILE:-/proc/uptime}" 2> /dev/null)
-  if valid_int "$cb_up"; then
-    st_booted=$(iso_from_epoch $(($(date +%s) - cb_up)))
+  cb_sys=$(cut -d . -f 1 "${TC_UPTIME_FILE:-/proc/uptime}" 2> /dev/null)
+  cb_start=$(sed 's/^.*) //' "${TC_PID1_STAT:-/proc/1/stat}" 2> /dev/null | cut -d ' ' -f 20)
+  if valid_int "$cb_sys" && valid_int "$cb_start"; then
+    cb_age=$((cb_sys - cb_start / ${TC_CLK_TCK:-100}))
+    if [ "$cb_age" -ge 0 ]; then
+      st_booted=$(iso_from_epoch $(($(date +%s) - cb_age)))
+    fi
   fi
 }
 

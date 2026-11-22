@@ -12,6 +12,8 @@ It asks for a node name, owner, and role, then for the five lines the gateway ow
 
 Your files live in `data/library`, and the setup makes a shortcut named `tinycloud` in your home folder. Copy files in from another machine with `scp book.epub NODE:tinycloud/`. Check on things with `tinycloud doctor`.
 
+Setup also asks whether to install Debian security updates automatically (default yes), whether to reboot automatically when an update needs it (default yes), and what time to do it (default 3:00 AM, the board's local time). Skip the questions with `--auto-update yes|no`, `--auto-reboot yes|no`, and `--reboot-time "3:00 AM"`. With `--yes` and no flags, updates are left as they are.
+
 ## Prepare an SD card
 
 For a Raspberry Pi or Orange Pi, `tools/flash-sd.sh` writes the operating system to an SD card and reads it back to check it. Run it on your Mac or Linux computer with the card in a reader:

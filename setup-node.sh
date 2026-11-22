@@ -10,6 +10,10 @@ NODE_NAME=
 OWNER=
 ROLE=
 TZ_NAME=
+AUTO_UPDATE=
+AUTO_REBOOT=
+REBOOT_TIME=
+UPDATE_CONF_DIR=${UPDATE_CONF_DIR:-/etc/apt/apt.conf.d}
 CONFIG_FILE=
 G_HOST=
 G_ID=
@@ -82,13 +86,13 @@ ask_yes() {
 }
 
 usage() {
-  say "usage: sh setup-node.sh [--name NAME] [--owner OWNER] [--role ROLE] [--timezone TZ] [--config FILE] [--yes] [--dry-run]"
+  say "usage: sh setup-node.sh [--name NAME] [--owner OWNER] [--role ROLE] [--timezone TZ] [--auto-update yes|no] [--auto-reboot yes|no] [--reboot-time TIME] [--config FILE] [--yes] [--dry-run]"
 }
 
 parse_args() {
   while [ $# -gt 0 ]; do
     case $1 in
-      --name | --owner | --role | --timezone | --config)
+      --name | --owner | --role | --timezone | --config | --auto-update | --auto-reboot | --reboot-time)
         [ $# -ge 2 ] || { usage; return 1; }
         case $1 in
           --name) NODE_NAME=$2 ;;
@@ -96,6 +100,9 @@ parse_args() {
           --role) ROLE=$2 ;;
           --timezone) TZ_NAME=$2 ;;
           --config) CONFIG_FILE=$2 ;;
+          --auto-update) AUTO_UPDATE=$2 ;;
+          --auto-reboot) AUTO_REBOOT=$2 ;;
+          --reboot-time) REBOOT_TIME=$2 ;;
         esac
         shift 2
         ;;
@@ -275,6 +282,153 @@ choose_role() {
   ROLE=$(role_name "$ANSWER")
 }
 
+time_24h() {
+  t24_in=$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]' | tr -d ' ')
+  t24_re='^([0-9]{1,2})(:([0-9]{2}))?(AM|PM)?$'
+  t24_h=$(printf '%s' "$t24_in" | sed -nE "s/$t24_re/\\1/p" | sed 's/^0*\([0-9]\)/\1/')
+  t24_m=$(printf '%s' "$t24_in" | sed -nE "s/$t24_re/\\3/p" | sed 's/^0*\([0-9]\)/\1/')
+  t24_ap=$(printf '%s' "$t24_in" | sed -nE "s/$t24_re/\\4/p")
+  [ -n "$t24_h" ] || return 1
+  t24_m=${t24_m:-0}
+  [ "$t24_m" -le 59 ] || return 1
+  if [ -n "$t24_ap" ]; then
+    [ "$t24_h" -ge 1 ] && [ "$t24_h" -le 12 ] || return 1
+    if [ "$t24_ap" = AM ] && [ "$t24_h" -eq 12 ]; then
+      t24_h=0
+    elif [ "$t24_ap" = PM ] && [ "$t24_h" -ne 12 ]; then
+      t24_h=$((t24_h + 12))
+    fi
+  else
+    [ "$t24_h" -le 23 ] || return 1
+  fi
+  printf '%02d:%02d' "$t24_h" "$t24_m"
+}
+
+time_12h() {
+  t12_h=$(printf '%s' "${1%%:*}" | sed 's/^0*\([0-9]\)/\1/')
+  t12_m=${1#*:}
+  t12_ap=AM
+  [ "$t12_h" -ge 12 ] && t12_ap=PM
+  t12_h=$((t12_h % 12))
+  [ "$t12_h" -eq 0 ] && t12_h=12
+  printf '%s:%s %s' "$t12_h" "$t12_m" "$t12_ap"
+}
+
+valid_reboot_time() {
+  [ -n "$(time_24h "$1")" ]
+}
+
+choose_updates() {
+  case $AUTO_UPDATE in
+    '' | yes | no) ;;
+    *) fail "--auto-update must be yes or no"; return 1 ;;
+  esac
+  case $AUTO_REBOOT in
+    '' | yes | no) ;;
+    *) fail "--auto-reboot must be yes or no"; return 1 ;;
+  esac
+  if [ -z "$AUTO_UPDATE" ]; then
+    if [ "$ASSUME_YES" = true ]; then
+      AUTO_UPDATE=no
+    elif ask_yes "Install security updates automatically?" y; then
+      AUTO_UPDATE=yes
+    else
+      AUTO_UPDATE=no
+    fi
+  fi
+  if [ "$AUTO_UPDATE" = no ]; then
+    if [ "$AUTO_REBOOT" = yes ]; then
+      fail "--auto-reboot needs automatic updates"
+      return 1
+    fi
+    AUTO_REBOOT=no
+    return 0
+  fi
+  if [ -z "$AUTO_REBOOT" ]; then
+    if [ "$ASSUME_YES" = true ]; then
+      AUTO_REBOOT=yes
+    elif ask_yes "Reboot automatically when an update needs it?" y; then
+      AUTO_REBOOT=yes
+    else
+      AUTO_REBOOT=no
+    fi
+  fi
+  if [ "$AUTO_REBOOT" = yes ]; then
+    if [ -z "$REBOOT_TIME" ]; then
+      choose_value "Reboot time (the board's local time, like 3:00 AM)" "3:00 AM" valid_reboot_time || return 1
+      REBOOT_TIME=$ANSWER
+    fi
+    valid_reboot_time "$REBOOT_TIME" || { fail "bad reboot time"; return 1; }
+    REBOOT_TIME=$(time_24h "$REBOOT_TIME")
+  fi
+}
+
+update_summary() {
+  case $AUTO_UPDATE in
+    yes)
+      if [ "$AUTO_REBOOT" = yes ]; then
+        printf 'automatic security updates, reboot at %s when needed' "$(time_12h "$REBOOT_TIME")"
+      else
+        printf 'automatic security updates, no automatic reboot'
+      fi
+      ;;
+    no) printf 'not automatic' ;;
+  esac
+}
+
+render_node_unattended() {
+  printf 'Unattended-Upgrade::Origins-Pattern {\n'
+  if [ "$os_id" = ubuntu ]; then
+    printf '  "origin=Ubuntu,archive=%s-security";\n' "$os_codename"
+  else
+    printf '  "origin=Debian,codename=%s-security,label=Debian-Security";\n' "$os_codename"
+  fi
+  printf '};\n'
+  if [ "$AUTO_REBOOT" = yes ]; then
+    printf 'Unattended-Upgrade::Automatic-Reboot "true";\n'
+    printf 'Unattended-Upgrade::Automatic-Reboot-WithUsers "true";\n'
+    printf 'Unattended-Upgrade::Automatic-Reboot-Time "%s";\n' "$REBOOT_TIME"
+  else
+    printf 'Unattended-Upgrade::Automatic-Reboot "false";\n'
+  fi
+}
+
+render_node_periodic() {
+  printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n'
+}
+
+ensure_package() {
+  if dpkg -s "$1" > /dev/null 2>&1; then
+    return 0
+  fi
+  say "$1 is missing."
+  if ! ask_yes "Install $1 now?" y; then
+    return 1
+  fi
+  if [ "$DRY_RUN" = true ]; then
+    say "+ apt-get install -y $1"
+    return 0
+  fi
+  apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y "$1"
+}
+
+setup_updates() {
+  [ "$AUTO_UPDATE" = yes ] || return 0
+  if ! ensure_package unattended-upgrades; then
+    say "Skipping automatic updates."
+    return 0
+  fi
+  if [ "$DRY_RUN" = true ]; then
+    say "+ write $UPDATE_CONF_DIR/52tinycloud-unattended"
+    say "+ write $UPDATE_CONF_DIR/20auto-upgrades"
+    return 0
+  fi
+  mkdir -p "$UPDATE_CONF_DIR" || return 1
+  render_node_unattended > "$UPDATE_CONF_DIR/52tinycloud-unattended" || return 1
+  render_node_periodic > "$UPDATE_CONF_DIR/20auto-upgrades" || return 1
+  chmod 644 "$UPDATE_CONF_DIR/52tinycloud-unattended" "$UPDATE_CONF_DIR/20auto-upgrades"
+}
+
 choose_basics() {
   if [ -z "$NODE_NAME" ]; then
     choose_value "Name for this node (lowercase letters, numbers, dashes)" "$(default_name)" valid_name || return 1
@@ -383,6 +537,9 @@ show_plan() {
     say "Node:     $NODE_NAME (owner $OWNER, role $ROLE)"
     say "Gateway:  $G_HOST"
     say "Timezone: $TZ_NAME"
+  fi
+  if [ -n "$AUTO_UPDATE" ]; then
+    say "Updates:  $(update_summary)"
   fi
   say "System:   $os_id $os_version"
   say ""
@@ -542,6 +699,9 @@ main() {
     choose_basics || return 1
     choose_gateway || return 1
   fi
+  if [ "$KEEP_CONFIG" != true ] || [ -n "$AUTO_UPDATE" ]; then
+    choose_updates || return 1
+  fi
   show_plan
   if ! ask_yes "Continue?" y; then
     say "cancelled"
@@ -550,6 +710,7 @@ main() {
   install_docker || return 1
   install_files || return 1
   write_config || return 1
+  setup_updates || return 1
   link_command || return 1
   setup_user
   start_node || return 1
