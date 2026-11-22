@@ -12,6 +12,16 @@ It asks for a node name, owner, and role, then for the five lines the gateway ow
 
 Your files live in `data/library`, and the setup makes a shortcut named `tinycloud` in your home folder. Copy files in from another machine with `scp book.epub NODE:tinycloud/`. Check on things with `tinycloud doctor`.
 
+## Prepare an SD card
+
+For a Raspberry Pi or Orange Pi, `tools/flash-sd.sh` writes the operating system to an SD card and reads it back to check it. Run it on your Mac or Linux computer with the card in a reader:
+
+```
+sh tools/flash-sd.sh
+```
+
+It lists only removable disks, makes you type the disk name before erasing, and downloads the Armbian image for the Orange Pi Zero 2W unless you pass `--image FILE_OR_URL`. When it finishes, put the card in the board, attach a screen and keyboard, make your user in the first-login wizard, then run `setup-node.sh` on the board.
+
 ## Files
 
 
