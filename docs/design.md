@@ -11,7 +11,9 @@ A private file cloud for trusted friends. Nodes sync your shared files through a
 | Agent | every node | small script, talks only to its own Syncthing |
 | Aggregator | gateway | `tinycloud-gw aggregate` builds the status views every 5 minutes |
 | `tinycloud` command | nodes | doctor, logs, debug, support, join, path, confirm, leave |
-| `tinycloud-gw` command | gateway | approve, remove, list, config, aggregate, view, backup, restore |
+| `tinycloud-gw` command | gateway | approve, remove, list, status, config, aggregate, view, backup, restore |
+| `setup-node.sh` | Docker hosts and boards | installs the node, then sets up updates, firewall, and SSH hardening |
+| `flash-sd.sh` | owner's computer | writes an Armbian image to a card with a first-boot preset |
 | `tinycloud-dashboard` | gateway owner's computer | shows the status table, or a page with `--web` |
 
 The gateway never stores the library. Anchor nodes hold full copies.
@@ -42,8 +44,9 @@ Nobody ever auto-accepts a folder or a device. The introducer feature is never u
 - Local discovery, NAT, and public relays are off.
 - The relay needs a token, so only our nodes can use it.
 - Syncthing's web page and API are never exposed.
-- Pi hosts run an nftables firewall: default deny, outbound only to the gateway, DNS, and NTP. IPv6 is blocked in v1.
-- LAN-only inbound: the status page (port 80), plus SSH and SMB only if the owner turns them on.
+- Pi images run an nftables firewall: default deny, outbound only to the gateway, DNS, and NTP. IPv6 is blocked in v1.
+- `setup-node.sh` can add a host firewall: inbound is dropped except the status page and SSH from the LAN, and Docker published ports are closed to anything outside the LAN. Outbound is not limited.
+- Pi images allow SMB only if the owner turns it on.
 
 ## Host security and updates
 
@@ -103,7 +106,7 @@ Runs every 5 minutes, then exits. It never hangs.
 
 1. Wait for Syncthing.
 2. Apply `peers.json` if it changed.
-3. Write status if it needs to.
+3. Check status every third run (about every 15 minutes) and write it if it needs to.
 
 ## Config
 
@@ -114,7 +117,6 @@ NODE_NAME=rocky
 OWNER=justin
 ROLE=anchor
 TIMEZONE=America/Phoenix
-UPDATE_HOUR=3
 GATEWAY_HOST=gateway.example.com
 GATEWAY_ID=AAAAAAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG-HHHHHHH
 RELAY_ID=AAAAAAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG-HHHHHHH
@@ -131,7 +133,7 @@ PEERS_CONFIRM=auto
 SMB_ENABLED=false
 ```
 
-Pi images keep it on the FAT partition named TINYCLOUD and delete it after first boot. Docker nodes keep it next to `docker-compose.yml`. `setup-node.sh` puts it in `/opt/tinycloud-node`.
+Pi images keep it on the FAT partition named TINYCLOUD and delete it after first boot. Docker nodes keep it next to `docker-compose.yml`. `setup-node.sh` puts it in `/opt/tinycloud-node`. The update, reboot, and channel choices from setup are kept in the system's own files, not here. Run setup again to change them.
 
 ## Logs and debug
 
@@ -178,7 +180,7 @@ Phase 5. Read-only. Lives in `apps/discord-bot/`. Each owner runs their own.
 
 The gateway builds the views every 5 minutes. For each approved node it reads that node's `status.json`, checks every field, and keeps only the known ones. Online or offline comes from Syncthing's connection list. The full view is `state/view.json`. Each owner's view is `view.json` in their `tc-view-OWNER` folder, which syncs to that owner's nodes.
 
-A node shows a warning when it is offline, low on space, has name conflicts, has no status yet, or has not reported in 36 hours.
+A node shows a warning when it is offline, low on space, has name conflicts, has no status yet, or has not reported in 36 hours, or has needed a reboot for more than 36 hours.
 
 ## If the gateway goes down
 
