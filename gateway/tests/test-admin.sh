@@ -253,7 +253,7 @@ cmd_aggregate
 full=$(cat "$GW_STATE/view.json")
 assert_jq "view shape" "$full" '.version == 1 and (.generated | test("^[0-9]{4}-")) and (.nodes | length) == 3'
 assert_jq "rocky online with status" "$full" '(.nodes[] | select(.name == "rocky")) | .online == true and .status.percent_stored == 42 and .status.case_conflicts == 1 and .status.reported == "2026-11-21T19:00:00Z" and .role == "reader"'
-assert_jq "node status keeps only known fields" "$full" '(.nodes[] | select(.name == "rocky") | .status | keys | sort) == ["case_conflicts","free_bytes","low_space","percent_stored","reported","version"]'
+assert_jq "node status keeps only known fields" "$full" '(.nodes[] | select(.name == "rocky") | .status | keys | sort) == ["booted","case_conflicts","free_bytes","low_space","percent_stored","reported","version"]'
 assert_jq "grace offline with no status" "$full" '(.nodes[] | select(.name == "grace")) | .online == false and .status == null'
 assert_jq "invalid status rejected" "$full" '(.nodes[] | select(.name == "brie")) | .status == null and .role == "reader"'
 assert_jq "justin view holds only his nodes" "$(cat "$FOLDERS_DIR/tc-view-justin/view.json")" '(.nodes | length) == 2 and all(.nodes[]; .owner == "justin")'
@@ -361,6 +361,37 @@ rm -f "$GW_HOME/.env"
 assert_eq "rotate needs gateway settings" 1 "$(cmd_rotate_token --yes > /dev/null 2>&1 && echo 0 || echo 1)"
 assert_eq "rotate rejects odd args" 1 "$(cmd_rotate_token --bogus > /dev/null 2>&1 && echo 0 || echo 1)"
 assert_contains "help lists rotate-token" "$(usage)" "rotate-token"
+
+reset
+printf 'yes\n' | cmd_approve rocky "$N1" reader justin > /dev/null 2>&1
+printf 'yes\n' | cmd_approve grace "$N2" reader justin > /dev/null 2>&1
+printf 'yes\n' | cmd_approve brie "$N3" reader finn > /dev/null 2>&1
+printf '{"connections":{"%s":{"connected":true},"%s":{"connected":true},"%s":{"connected":true}}}' "$N1" "$N2" "$N3" > "$FAKE/connections.json"
+printf '{"v":1,"name":"rocky","role":"reader","version":"0.1.0","percent_stored":42,"free_bytes":5000000000,"low_space":false,"case_conflicts":0,"time":"2026-11-21T19:00:00Z","booted":"2026-11-19T10:00:00Z"}' > "$FOLDERS_DIR/tc-status-rocky/status.json"
+printf '{"v":1,"name":"grace","role":"reader","version":"0.1.0","percent_stored":42,"free_bytes":5000000000,"low_space":false,"case_conflicts":0,"time":"2026-11-21T19:00:00Z"}' > "$FOLDERS_DIR/tc-status-grace/status.json"
+printf '{"v":1,"name":"brie","role":"reader","version":"0.1.0","percent_stored":42,"free_bytes":5000000000,"low_space":false,"case_conflicts":0,"time":"2026-11-21T19:00:00Z","booted":"yesterday"}' > "$FOLDERS_DIR/tc-status-brie/status.json"
+cmd_aggregate
+assert_jq "booted passes through" "$(cat "$GW_STATE/view.json")" '(.nodes[] | select(.name == "rocky")) | .status.booted == "2026-11-19T10:00:00Z"'
+assert_jq "missing booted is null" "$(cat "$GW_STATE/view.json")" '(.nodes[] | select(.name == "grace")) | .status.booted == null'
+assert_jq "bad booted rejects the status" "$(cat "$GW_STATE/view.json")" '(.nodes[] | select(.name == "brie")) | .status == null'
+
+reset
+nowiso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+mkdir -p "$GW_STATE"
+cat > "$GW_STATE/view.json" << EOT
+{"version":1,"generated":"$nowiso","nodes":[
+{"name":"old","role":"reader","owner":"a","online":true,"status":{"version":"0.1.0","percent_stored":100,"free_bytes":1000000000,"low_space":false,"case_conflicts":0,"reported":"$nowiso","booted":"2020-01-01T00:00:00Z"}},
+{"name":"fresh","role":"reader","owner":"a","online":true,"status":{"version":"0.1.0","percent_stored":100,"free_bytes":1000000000,"low_space":false,"case_conflicts":0,"reported":"$nowiso","booted":"$nowiso"}},
+{"name":"down","role":"reader","owner":"a","online":false,"status":{"version":"0.1.0","percent_stored":100,"free_bytes":1000000000,"low_space":false,"case_conflicts":0,"reported":"$nowiso","booted":"2020-01-01T00:00:00Z"}},
+{"name":"legacy","role":"reader","owner":"a","online":true,"status":{"version":"0.1.0","percent_stored":100,"free_bytes":1000000000,"low_space":false,"case_conflicts":0,"reported":"$nowiso","booted":null}}]}
+EOT
+st=$(cmd_status)
+assert_contains "status has an uptime column" "$st" "UPTIME"
+row() { printf '%s\n' "$st" | awk -v n="$1" '$1 == n'; }
+assert_contains "old boot shows days" "$(row old)" "days"
+assert_contains "fresh boot shows minutes" "$(row fresh)" "1 min"
+assert_eq "offline node has no uptime" 0 "$(row down | grep -c 'days')"
+assert_eq "node without booted shows a dash" 1 "$(row legacy | awk '{print $5}' | grep -c '^-$')"
 
 reset
 printf '{"connections":null}' > "$FAKE/connections.json"

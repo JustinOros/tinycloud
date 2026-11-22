@@ -27,7 +27,7 @@ main > "$FAKE_DIR/out" 2>&1
 assert_eq "main ok" 0 "$?"
 status=$(cat "$STATUS_DIR/status.json")
 assert_jq "status fields" "$status" '.v == 1 and .name == "rocky" and .role == "anchor" and .percent_stored == 50 and .case_conflicts == 1 and .low_space == false and (.free_bytes | type) == "number"'
-assert_jq "status has only known keys" "$status" '(keys | sort) == ["case_conflicts","free_bytes","low_space","name","percent_stored","role","time","v","version"]'
+assert_jq "status has only known keys" "$status" '(keys | sort) == ["booted","case_conflicts","free_bytes","low_space","name","percent_stored","role","time","v","version"]'
 assert_eq "no temp file left behind" 0 "$(find "$STATUS_DIR" -name '*tmp*' | wc -l | tr -d ' ')"
 assert_eq "local copy written" 1 "$(test -f "$TC_STATE_DIR/status.local.json" && echo 1 || echo 0)"
 
@@ -43,6 +43,24 @@ assert_eq "2 point change not written" 0 "$(test -f "$STATUS_DIR/status.json" &&
 printf '{"state":"idle","globalBytes":1000,"localBytes":600,"pullErrors":0}' > "$FAKE_DIR/dbstatus.json"
 main > "$FAKE_DIR/out" 2>&1
 assert_eq "big change written" 1 "$(test -f "$STATUS_DIR/status.json" && echo 1 || echo 0)"
+
+setup
+TC_UPTIME_FILE=$SANDBOX/uptime
+export TC_UPTIME_FILE
+printf '3600.50 7000.00\n' > "$TC_UPTIME_FILE"
+main > "$FAKE_DIR/out" 2>&1
+booted=$(jq -r '.booted' "$STATUS_DIR/status.json")
+assert_eq "booted is an iso time" 1 "$(printf '%s' "$booted" | grep -Ec '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$')"
+now_s=$(date +%s)
+booted_s=$(date -u -d "$booted" +%s 2> /dev/null || TZ=UTC date -j -f '%Y-%m-%dT%H:%M:%SZ' "$booted" +%s)
+diff=$((now_s - 3600 - booted_s))
+assert_eq "booted matches the uptime" 1 "$([ "$diff" -ge -5 ] && [ "$diff" -le 5 ] && echo 1 || echo 0)"
+printf 'garbage\n' > "$TC_UPTIME_FILE"
+rm -rf "$STATUS_DIR" "$TC_STATE_DIR"/status.*
+mkdir -p "$TC_STATE_DIR"
+main > "$FAKE_DIR/out" 2>&1
+assert_jq "no booted when uptime unreadable" "$(cat "$STATUS_DIR/status.json")" 'has("booted") | not'
+unset TC_UPTIME_FILE
 
 setup
 printf '{"state":"idle","globalBytes":0,"localBytes":0}' > "$FAKE_DIR/dbstatus.json"
@@ -62,6 +80,12 @@ assert_eq "2 points writes" yes "$(same_ok "$A" '{"percent_stored":52,"low_space
 assert_eq "low space flip writes" yes "$(same_ok "$A" '{"percent_stored":50,"low_space":true,"version":"0.1.0","role":"anchor","case_conflicts":0}' 1000 900)"
 assert_eq "version change writes" yes "$(same_ok "$A" '{"percent_stored":50,"low_space":false,"version":"0.2.0","role":"anchor","case_conflicts":0}' 1000 900)"
 assert_eq "conflict change writes" yes "$(same_ok "$A" '{"percent_stored":50,"low_space":false,"version":"0.1.0","role":"anchor","case_conflicts":2}' 1000 900)"
+B1='{"percent_stored":50,"low_space":false,"version":"0.1.0","role":"anchor","case_conflicts":0,"booted":"2026-11-21T10:00:00Z"}'
+B2='{"percent_stored":50,"low_space":false,"version":"0.1.0","role":"anchor","case_conflicts":0,"booted":"2026-11-21T10:01:00Z"}'
+B3='{"percent_stored":50,"low_space":false,"version":"0.1.0","role":"anchor","case_conflicts":0,"booted":"2026-11-21T18:00:00Z"}'
+assert_eq "boot jitter skips" no "$(same_ok "$B1" "$B2" 1000 900)"
+assert_eq "reboot writes" yes "$(same_ok "$B1" "$B3" 1000 900)"
+assert_eq "first booted report writes" yes "$(same_ok "$A" "$B1" 1000 900)"
 assert_eq "24 hours writes" yes "$(same_ok "$A" "$A" 100000 1000)"
 
 setup

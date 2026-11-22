@@ -126,6 +126,16 @@ function ago(iso) {
   if (h < 48) return h + ' hr ago';
   return Math.round(h / 24) + ' days ago';
 }
+function dur(iso) {
+  const t = Date.parse(iso);
+  if (isNaN(t)) return '-';
+  const m = Math.round((Date.now() - t) / 60000);
+  if (m < 0) return '-';
+  if (m < 60) return Math.max(1, m) + ' min';
+  const h = Math.round(m / 60);
+  if (h < 48) return h + ' hr';
+  return Math.round(h / 24) + ' days';
+}
 function clock(iso) {
   const t = new Date(iso);
   if (isNaN(t)) return '';
@@ -159,9 +169,9 @@ function render() {
   }
   const table = el('table');
   const head = el('tr');
-  ['Node', 'Owner', 'Role', 'State', 'Stored', 'Free', 'Version', 'Last status change', 'Warnings'].forEach((h, i) => {
+  ['Node', 'Owner', 'Role', 'State', 'Uptime', 'Stored', 'Free', 'Version', 'Last status change', 'Warnings'].forEach((h, i) => {
     const th = el('th', h);
-    if (i === 2 || i === 6) th.className = 'hide';
+    if (i === 2 || i === 7) th.className = 'hide';
     head.appendChild(th);
   });
   table.appendChild(head);
@@ -179,6 +189,8 @@ function render() {
     wrap.appendChild(document.createTextNode(label));
     state.appendChild(wrap);
     tr.appendChild(state);
+    const up = n.online !== false && s && s.booted ? dur(s.booted) : '-';
+    tr.appendChild(el('td', up));
     const stored = el('td');
     if (s) {
       const bar = el('span', undefined, 'bar');

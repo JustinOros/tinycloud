@@ -170,6 +170,16 @@ EOT
   assert_contains "js shows conflicts" "$js" "2 name conflicts"
   assert_contains "js shows free space" "$js" "156.1 GB"
   assert_contains "js shows unknown state" "$js" "Unknown"
+  assert_contains "js has an uptime column" "$js" "Uptime"
+
+  nowiso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  cat > "$VIEW_FILE" << EOT
+{"version":1,"generated":"$nowiso","nodes":[{"name":"old","role":"reader","owner":"a","online":true,"status":{"version":"0.1.0","percent_stored":100,"free_bytes":1,"low_space":false,"case_conflicts":0,"reported":"$nowiso","booted":"2020-01-01T00:00:00Z"}},{"name":"down","role":"reader","owner":"a","online":false,"status":{"version":"0.1.0","percent_stored":100,"free_bytes":1,"low_space":false,"case_conflicts":0,"reported":"$nowiso","booted":"2020-01-01T00:00:00Z"}}]}
+EOT
+  sh "$ROOT/dashboard/tinycloud-dashboard" --web --no-open --out "$OUT" gw.example.com > /dev/null 2>&1
+  js=$(node "$SANDBOX/run.js" "$OUT" 2>&1)
+  assert_contains "js shows uptime in days" "$js" "days"
+  assert_eq "offline node has no uptime in js" 1 "$(printf '%s\n' "$js" | tail -1 | tr '|' '\n' | grep -c ' days$')"
 fi
 
 finish

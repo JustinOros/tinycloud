@@ -72,7 +72,7 @@ Optional: `PEERS_CONFIRM=manual` makes the node's owner confirm each new peer fi
 
 ## Status
 
-- Each node reports a tiny `status.json`: role, version, percent stored, free space, low space, case conflicts.
+- Each node reports a tiny `status.json`: role, version, percent stored, free space, low space, case conflicts, boot time (the dashboard turns it into uptime).
 - It is written only when percent stored moves 2 points or more, low space flips, the version or role changes, case conflicts change, or once a day.
 - Low space means free space is under 1.5 times the free space floor.
 - Online or offline comes from the gateway, not from this file.

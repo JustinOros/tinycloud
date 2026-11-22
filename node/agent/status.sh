@@ -12,6 +12,18 @@ count_case_conflicts() {
   list_paths "$1" | tr '[:upper:]' '[:lower:]' | sort | uniq -d | wc -l | tr -d ' '
 }
 
+iso_from_epoch() {
+  date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ 2> /dev/null || date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ
+}
+
+collect_booted() {
+  st_booted=
+  cb_up=$(cut -d . -f 1 "${TC_UPTIME_FILE:-/proc/uptime}" 2> /dev/null)
+  if valid_int "$cb_up"; then
+    st_booted=$(iso_from_epoch $(($(date +%s) - cb_up)))
+  fi
+}
+
 collect_status() {
   cs_db=$(st_api GET "/rest/db/status?folder=$LIB_FOLDER") || return 1
   cs_global=$(printf '%s' "$cs_db" | jq -r '.globalBytes // 0')
@@ -41,14 +53,16 @@ collect_status() {
     st_low=true
   fi
   st_conflicts=$(count_case_conflicts "$TC_LIBRARY_DIR")
+  collect_booted
 }
 
 build_status_json() {
   jq -nc --arg name "$(conf_get NODE_NAME)" --arg role "$(conf_get ROLE reader)" --arg version "$TC_VERSION" \
     --argjson pct "$st_percent" --argjson free "$st_free_bytes" --argjson low "$st_low" \
-    --argjson cc "$st_conflicts" --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --argjson cc "$st_conflicts" --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg booted "$st_booted" \
     '{v: 1, name: $name, role: $role, version: $version, percent_stored: $pct, free_bytes: $free,
-      low_space: $low, case_conflicts: $cc, time: $time}'
+      low_space: $low, case_conflicts: $cc, time: $time}
+     + (if $booted == "" then {} else {booted: $booted} end)'
 }
 
 should_write_status() {
@@ -57,11 +71,13 @@ should_write_status() {
   fi
   jq -ne --argjson a "$1" --argjson b "$2" --argjson now "$3" --argjson last "$4" '
     def absval: if . < 0 then -. else . end;
+    def boot: if (.booted // null) == null then null else (.booted | fromdateiso8601) end;
     (($a.percent_stored - $b.percent_stored) | absval) >= 2
     or $a.low_space != $b.low_space
     or $a.version != $b.version
     or $a.role != $b.role
     or $a.case_conflicts != $b.case_conflicts
+    or (($a | boot) as $x | ($b | boot) as $y | (($x == null) != ($y == null)) or ($x != null and (($x - $y) | absval) > 120))
     or ($now - $last) >= 86400' > /dev/null
 }
 

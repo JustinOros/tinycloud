@@ -287,8 +287,9 @@ node_status() {
       and (.free_bytes | type == "number" and . >= 0)
       and (.low_space | type == "boolean")
       and (.case_conflicts | type == "number" and . >= 0 and . == floor)
-      and (.time | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")))
-    | {version, percent_stored, free_bytes, low_space, case_conflicts, reported: .time}' "$ns_file" 2> /dev/null)
+      and (.time | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
+      and (.booted == null or (.booted | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))))
+    | {version, percent_stored, free_bytes, low_space, case_conflicts, reported: .time, booted: (.booted // null)}' "$ns_file" 2> /dev/null)
   if [ -n "$ns_out" ]; then
     printf '%s' "$ns_out"
   else
@@ -360,6 +361,8 @@ cmd_view() {
 
 STATUS_JQ='
   def age: if . < 0 then "-" elif . < 60 then "just now" elif . < 3600 then "\((. / 60 | floor)) min ago" elif . < 172800 then "\((. / 3600 | floor)) hr ago" else "\((. / 86400 | floor)) days ago" end;
+  def dur: if . < 0 then "-" elif . < 3600 then "\([(. / 60 | floor), 1] | max) min" elif . < 172800 then "\((. / 3600 | floor)) hr" else "\((. / 86400 | floor)) days" end;
+  def uptime: if .online == false or (.status.booted // null) == null then "-" else ((now - (.status.booted | fromdateiso8601)) | floor | dur) end;
   def warnings:
     [ (if .online == false then "Offline" else empty end),
       (if .status == null then "No status yet"
@@ -371,6 +374,7 @@ STATUS_JQ='
   .nodes | sort_by([.owner, .name])[]
   | [ .name, .owner, .role,
       (if .online == true then "Online" elif .online == false then "Offline" else "Unknown" end),
+      uptime,
       (if .status == null then "-" else "\(.status.percent_stored)%" end),
       (if .status == null then "-" else (.status.free_bytes | tostring) end),
       (.status.version // "-"),
@@ -399,18 +403,18 @@ render_status() {
       return line
     }
     BEGIN {
-      split("NODE OWNER ROLE STATE STORED FREE VERSION CHANGED WARNINGS", head, " ")
-      for (i = 1; i <= 9; i++) w[i] = length(head[i])
+      split("NODE OWNER ROLE STATE UPTIME STORED FREE VERSION CHANGED WARNINGS", head, " ")
+      for (i = 1; i <= 10; i++) w[i] = length(head[i])
     }
     {
       n++
-      if ($6 != "-") $6 = sprintf("%.1f GB", $6 / 1073741824)
-      for (i = 1; i <= 9; i++) {
+      if ($7 != "-") $7 = sprintf("%.1f GB", $7 / 1073741824)
+      for (i = 1; i <= 10; i++) {
         row[n, i] = $i
         if (length($i) > w[i]) w[i] = length($i)
       }
       if ($4 == "Online") up++
-      if ($9 != "") warn++
+      if ($10 != "") warn++
     }
     END {
       if (n == 0) {
@@ -419,12 +423,12 @@ render_status() {
       }
       printf "TinyCloud: %d node%s, %d online, %d with warnings. Updated %s.\n\n", n, (n == 1 ? "" : "s"), up, warn, age(gen)
       line = ""
-      for (i = 1; i <= 9; i++) line = line sprintf("%-" w[i] "s  ", head[i])
+      for (i = 1; i <= 10; i++) line = line sprintf("%-" w[i] "s  ", head[i])
       sub(/ +$/, "", line)
       print line
       for (r = 1; r <= n; r++) {
         line = ""
-        for (i = 1; i <= 9; i++) line = line sprintf("%-" w[i] "s  ", row[r, i])
+        for (i = 1; i <= 10; i++) line = line sprintf("%-" w[i] "s  ", row[r, i])
         sub(/ +$/, "", line)
         print paint(line)
       }
