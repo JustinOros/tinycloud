@@ -45,6 +45,17 @@ Nobody ever auto-accepts a folder or a device. The introducer feature is never u
 - Pi hosts run an nftables firewall: default deny, outbound only to the gateway, DNS, and NTP. IPv6 is blocked in v1.
 - LAN-only inbound: the status page (port 80), plus SSH and SMB only if the owner turns them on.
 
+## Host security and updates
+
+- Setup asks about each of these, and a plain `--yes` leaves them alone.
+- Debian security updates install automatically. Reboots happen only at the chosen time, and only when an update needs one.
+- Armbian kernel and firmware are never auto-updated, because a bad kernel can stop a board from booting.
+- If a reboot has been pending for 36 hours, the node reports it and the dashboard shows "Reboot needed".
+- SSH allows keys only once an `authorized_keys` file exists, limits login attempts, and fail2ban bans repeat offenders.
+- A nightly timer updates TinyCloud itself from the `stable` branch (default), from `main` (testing), or not at all.
+- An update that leaves Syncthing, the agent or the web page unhealthy is rolled back from a saved copy.
+- Publish a release with `git push origin main:stable`.
+
 ## Joining
 
 1. The node makes its own ID on first boot. `tinycloud join` prints one line and a short code. The local status page shows them too, with a QR. The code is the first 6 characters of the SHA-256 of the device ID.
