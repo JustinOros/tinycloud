@@ -1,5 +1,6 @@
 services:
   init:
+    container_name: ${TC_PREFIX:-tinycloud}-init
     image: alpine:3.20
     user: "0:0"
     command: >
@@ -16,6 +17,7 @@ services:
       - syncthing-config:/syncthing-config
 
   syncthing:
+    container_name: ${TC_PREFIX:-tinycloud}-syncthing
     image: syncthing/syncthing:1.29
     user: "1000:1000"
     environment:
@@ -35,6 +37,7 @@ services:
         condition: service_completed_successfully
 
   agent:
+    container_name: ${TC_PREFIX:-tinycloud}-agent
     build:
       context: .
       dockerfile: Dockerfile.agent
@@ -62,6 +65,7 @@ services:
         condition: service_completed_successfully
 
   web:
+    container_name: ${TC_PREFIX:-tinycloud}-web
     image: busybox:1.36
     user: "1000:1000"
     command: ["httpd", "-f", "-p", "8080", "-h", "/web"]

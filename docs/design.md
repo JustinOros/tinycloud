@@ -160,6 +160,8 @@ Each node serves a read-only page: connection state, space, warnings, and (until
 - Pi images: LAN only, port 80. This is the one inbound rule added to the brief.
 - Docker nodes: `127.0.0.1:8080` by default (`TC_STATUS_BIND` changes it).
 
+Docker containers are named `tinycloud-syncthing`, `tinycloud-agent`, `tinycloud-web`, and `tinycloud-init`. To run a second node on the same host, use its own folder, set `TC_PREFIX` to a different name, and set a different `TC_STATUS_BIND` port.
+
 ## Discord bot (optional, off by default)
 
 Phase 5. Read-only. Lives in `apps/discord-bot/`. Each owner runs their own.
