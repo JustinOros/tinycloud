@@ -95,6 +95,16 @@ assert_contains "retries a bad name" "$out" "That is not valid."
 assert_contains "retries incomplete gateway lines" "$out" "GATEWAY_ID is missing or not valid."
 assert_contains "ends with a valid plan" "$out" "Node:     adrian (owner justin, role reader)"
 
+printf 'adrian\njustin\n2\nUTC\n%s\n\ny\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in4"
+out=$(run_setup debian13 "$SANDBOX/in4" --dry-run)
+assert_contains "role menu lists choices" "$out" "2) contributor  sends and receives"
+assert_contains "role number picks the role" "$out" "role contributor"
+
+printf 'adrian\njustin\n9\n\nUTC\n%s\n\ny\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in5"
+out=$(run_setup debian13 "$SANDBOX/in5" --dry-run)
+assert_contains "bad role number retried" "$out" "That is not valid."
+assert_contains "blank role defaults to reader" "$out" "role reader"
+
 printf 'adrian\njustin\nreader\nUTC\n%s\n\nn\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in3"
 out=$(run_setup debian13 "$SANDBOX/in3" --dry-run)
 assert_contains "declined" "$out" "cancelled"

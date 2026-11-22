@@ -252,6 +252,29 @@ choose_value() {
   fail "no valid answer for: $cv_label"
 }
 
+role_name() {
+  case $1 in
+    1 | anchor) printf 'anchor' ;;
+    2 | contributor) printf 'contributor' ;;
+    3 | partial) printf 'partial' ;;
+    4 | reader) printf 'reader' ;;
+  esac
+}
+
+valid_role_choice() {
+  [ -n "$(role_name "$1")" ]
+}
+
+choose_role() {
+  say "Role:"
+  say "  1) anchor       always on, full copy"
+  say "  2) contributor  sends and receives"
+  say "  3) partial      stores what fits"
+  say "  4) reader       receives only"
+  choose_value "Which role? (number)" 4 valid_role_choice || return 1
+  ROLE=$(role_name "$ANSWER")
+}
+
 choose_basics() {
   if [ -z "$NODE_NAME" ]; then
     choose_value "Name for this node (lowercase letters, numbers, dashes)" "$(default_name)" valid_name || return 1
@@ -264,9 +287,7 @@ choose_basics() {
   fi
   valid_name "$OWNER" || { fail "bad owner"; return 1; }
   if [ -z "$ROLE" ]; then
-    say "Roles: anchor (always on, full copy), contributor (sends and receives), partial (stores what fits), reader (receives only)"
-    choose_value "Role" "${ROLE:-reader}" valid_role || return 1
-    ROLE=$ANSWER
+    choose_role || return 1
   fi
   valid_role "$ROLE" || { fail "bad role"; return 1; }
   if [ -z "$TZ_NAME" ]; then
