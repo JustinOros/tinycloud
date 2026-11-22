@@ -16,6 +16,7 @@ BIG_DISK_BYTES=512000000000
 PRESET_COPY=
 PRESET_TMP=
 P_KEY=
+P_SUDO=yes
 PROV_TMP=
 
 say() {
@@ -579,7 +580,7 @@ ask_value() {
     fi
     read -r av_in || return 1
     av_in=${av_in:-$2}
-    if printf '%s' "$av_in" | grep -Eq "$3"; then
+    if printf '%s\n' "$av_in" | grep -Eq "$3"; then
       VALUE=$av_in
       return 0
     fi
@@ -629,6 +630,10 @@ default_user() {
   id -un 2> /dev/null | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]//g'
 }
 
+random_password() {
+  LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32
+}
+
 collect_headless() {
   P_ENABLED=false
   if ! is_armbian "$IMAGE"; then
@@ -650,8 +655,20 @@ collect_headless() {
   esac
   ask_value "Username for the board" "$(default_user)" '^[a-z][a-z0-9_-]{0,31}$' "Use lowercase letters, digits, dash, or underscore, starting with a letter." || return 1
   P_USER=$VALUE
-  ask_secret "Password for $P_USER (also used for root)" 8 || return 1
+  ask_secret "Password for $P_USER" 8 || return 1
   P_PASS=$SECRET
+  ask_value "Let $P_USER use sudo? (n means admin work is done as root) [Y/n]" "" '^[YyNn]?$' "Type y or n." || return 1
+  case $VALUE in
+    [Nn])
+      P_SUDO=no
+      ask_secret "Root password (needed for admin work, use a different one)" 8 || return 1
+      P_ROOT_PASS=$SECRET
+      ;;
+    *)
+      P_SUDO=yes
+      P_ROOT_PASS=$(random_password)
+      ;;
+  esac
   ask_value "Wi-Fi name (blank for wired only)" "" '^$|^[ -~]{1,32}$' "Use 1 to 32 plain characters." || return 1
   P_SSID=$VALUE
   P_WIFIKEY=
@@ -730,7 +747,7 @@ render_preset() {
   printf 'SET_LANG_BASED_ON_LOCATION="n"\n'
   printf 'PRESET_LOCALE="en_US.UTF-8"\n'
   printf 'PRESET_TIMEZONE="%s"\n' "$P_TZ"
-  printf 'PRESET_ROOT_PASSWORD="%s"\n' "$(escape_value "$P_PASS")"
+  printf 'PRESET_ROOT_PASSWORD="%s"\n' "$P_ROOT_PASS"
   printf 'PRESET_USER_NAME="%s"\n' "$P_USER"
   printf 'PRESET_USER_PASSWORD="%s"\n' "$(escape_value "$P_PASS")"
   printf 'PRESET_DEFAULT_REALNAME="%s"\n' "$P_USER"
@@ -742,6 +759,12 @@ render_preset() {
 render_provisioning() {
   printf '#!/bin/sh\n'
   printf "u='%s'\n" "$P_USER"
+  if [ "$P_SUDO" = yes ]; then
+    printf 'if id "$u" > /dev/null 2>&1; then usermod -aG sudo "$u"; fi\n'
+  else
+    printf 'if id "$u" > /dev/null 2>&1; then gpasswd -d "$u" sudo > /dev/null 2>&1; fi\n'
+  fi
+  [ -n "$P_KEY" ] || return 0
   printf "k='%s'\n" "$P_KEY"
   printf 'if [ -d "/home/$u" ]; then d=/home/$u; o=$u; else d=/root; o=root; fi\n'
   printf 'mkdir -p "$d/.ssh"\n'
@@ -823,7 +846,7 @@ apply_preset() {
   "$DEBUGFS" -w -R "sif /root/.not_logged_in_yet mode 0100600" "$ap_target" > /dev/null 2>&1
   "$DEBUGFS" -w -R "sif /root/.not_logged_in_yet uid 0" "$ap_target" > /dev/null 2>&1
   "$DEBUGFS" -w -R "sif /root/.not_logged_in_yet gid 0" "$ap_target" > /dev/null 2>&1
-  if [ -n "$P_KEY" ]; then
+  if true; then
     PROV_TMP=$WORK_DIR/.prov.tmp
     render_provisioning > "$PROV_TMP"
     "$DEBUGFS" -w -R "rm /root/provisioning.sh" "$ap_target" > /dev/null 2>&1
@@ -896,7 +919,14 @@ finish_up() {
     say "  3. Connect with: ssh $P_USER@ADDRESS"
     say "  4. Then run setup-node.sh on the board."
     say ""
-    say "The password is stored on the card until the first boot finishes."
+    if [ "$P_SUDO" = yes ]; then
+      say "Log in as $P_USER and use sudo for admin tasks."
+      say "Backup root password, only if sudo does not work: $P_ROOT_PASS"
+    else
+      say "Log in as $P_USER. For admin tasks, run su - and use the root password you set."
+    fi
+    say ""
+    say "The settings are stored on the card until the first boot finishes."
   else
     say "  1. Put the card in the board, attach a screen and keyboard, and power it on."
     say "  2. In the first-login wizard, make your user, join your Wi-Fi, and set the timezone."

@@ -348,18 +348,37 @@ choose_image > /dev/null 2>&1
 assert_eq "yes mode uses the tested image" "$TESTED_URL" "$IMAGE"
 ASSUME_YES=false
 
-P_SSID='Home "Net"'; P_WIFIKEY='p$ss`w\rd'; P_COUNTRY=US; P_TZ=America/Phoenix; P_USER=justin; P_PASS='a"b$c'; P_GITHUB=JustinOros
+P_SSID='Home "Net"'; P_WIFIKEY='p$ss`w\rd'; P_COUNTRY=US; P_TZ=America/Phoenix; P_USER=justin; P_PASS='a"b$c'; P_ROOT_PASS=rootrandom123; P_GITHUB=JustinOros
 render_preset > "$SANDBOX/preset"
 assert_contains "preset escapes quotes" "$(cat "$SANDBOX/preset")" 'PRESET_NET_WIFI_SSID="Home \"Net\""'
 assert_contains "preset escapes dollar and backtick" "$(cat "$SANDBOX/preset")" 'PRESET_NET_WIFI_KEY="p\$ss\`w\\rd"'
 assert_contains "preset has user" "$(cat "$SANDBOX/preset")" 'PRESET_USER_NAME="justin"'
 assert_contains "preset has key url" "$(cat "$SANDBOX/preset")" 'PRESET_USER_KEY="https://github.com/JustinOros.keys"'
 assert_eq "preset sourceable" "Home \"Net\"" "$(sh -c ". $SANDBOX/preset; printf %s \"\$PRESET_NET_WIFI_SSID\"")"
+assert_contains "root gets its own password" "$(cat "$SANDBOX/preset")" 'PRESET_ROOT_PASSWORD="rootrandom123"'
+assert_eq "user password not given to root" 0 "$(grep ROOT_PASSWORD "$SANDBOX/preset" | grep -c 'a\\"b')"
+assert_eq "random password is 32 plain characters" 1 "$(random_password | grep -Ec '^[A-Za-z0-9]{32}$')"
+assert_eq "random passwords differ" 1 "$([ "$(random_password)" != "$(random_password)" ] && echo 1 || echo 0)"
 assert_eq "preset password round trips" 'a"b$c' "$(sh -c ". $SANDBOX/preset; printf %s \"\$PRESET_USER_PASSWORD\"")"
 P_SSID=
 render_preset > "$SANDBOX/preset"
 assert_contains "wired preset" "$(cat "$SANDBOX/preset")" 'PRESET_NET_ETHERNET_ENABLED="1"'
 
+IMAGE=Armbian_community_x.img.xz
+HEADLESS=ask
+ASSUME_YES=false
+printf '\njustin\nuserpass1\nuserpass1\nn\nrootpass1\nrootpass1\n\n\ns\n' > "$SANDBOX/in"
+collect_headless < "$SANDBOX/in" > "$SANDBOX/out" 2>&1
+assert_eq "headless flow completes with no sudo" 0 "$?"
+assert_eq "no sudo recorded" no "$P_SUDO"
+assert_eq "root password asked when no sudo" rootpass1 "$P_ROOT_PASS"
+assert_eq "user password kept" userpass1 "$P_PASS"
+printf '\njustin\nuserpass1\nuserpass1\n\n\n\ns\n' > "$SANDBOX/in"
+collect_headless < "$SANDBOX/in" > "$SANDBOX/out" 2>&1
+assert_eq "headless flow completes with sudo" 0 "$?"
+assert_eq "sudo defaults to yes" yes "$P_SUDO"
+assert_eq "random root password with sudo" 1 "$(printf '%s' "$P_ROOT_PASS" | grep -Ec '^[A-Za-z0-9]{32}$')"
+IMAGE=
 dd if=/dev/zero of="$SANDBOX/fs.part" bs=1048576 count=8 2> /dev/null
 mke2fs -q -t ext4 -F "$SANDBOX/fs.part" > /dev/null 2>&1
 debugfs -w -R "mkdir /root" "$SANDBOX/fs.part" > /dev/null 2>&1
@@ -377,7 +396,7 @@ assert_eq "rsa key accepted" 0 "$(valid_ssh_key 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQA
 assert_eq "junk refused" 1 "$(valid_ssh_key 'hello world'; echo $?)"
 assert_eq "quote injection refused" 1 "$(valid_ssh_key "ssh-ed25519 AAAA'; rm -rf /; '"; echo $?)"
 assert_eq "root offset found" 1048576 "$(find_root_offset "$SANDBOX/hl.img")"
-P_ENABLED=true; P_SSID=Net; P_WIFIKEY=secretkey1; P_USER=justin; P_PASS=hunter22x; P_TZ=UTC; P_COUNTRY=US; P_GITHUB=; P_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc'
+P_ENABLED=true; P_SSID=Net; P_WIFIKEY=secretkey1; P_USER=justin; P_PASS=hunter22x; P_ROOT_PASS=rootrandom123; P_TZ=UTC; P_COUNTRY=US; P_GITHUB=; P_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc'
 IMG_FILE=$SANDBOX/hl.img
 need_debugfs() { return 0; }
 apply_preset > "$SANDBOX/out" 2>&1
@@ -385,6 +404,14 @@ assert_eq "preset applied" 0 "$?"
 assert_contains "image copy used" "$IMG_FILE" "headless.img"
 assert_contains "preset readable from image" "$(debugfs -R 'cat /root/.not_logged_in_yet' "$IMG_FILE?offset=1048576" 2> /dev/null)" 'PRESET_USER_NAME="justin"'
 assert_contains "provisioning script in image" "$(debugfs -R 'cat /root/provisioning.sh' "$IMG_FILE?offset=1048576" 2> /dev/null)" "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIabc"
+assert_contains "provisioning adds sudo" "$(debugfs -R 'cat /root/provisioning.sh' "$IMG_FILE?offset=1048576" 2> /dev/null)" 'usermod -aG sudo'
+P_KEY=
+P_SUDO=no
+assert_eq "no sudo removes the group" 1 "$(render_provisioning | grep -c 'gpasswd -d')"
+assert_eq "no sudo never adds the group" 0 "$(render_provisioning | grep -c 'usermod -aG sudo')"
+P_SUDO=yes
+assert_eq "no key still adds sudo" 1 "$(render_provisioning | grep -c 'usermod -aG sudo')"
+assert_eq "no key writes no key lines" 0 "$(render_provisioning | grep -c authorized_keys)"
 assert_eq "provisioning script is valid sh" 0 "$(debugfs -R 'cat /root/provisioning.sh' "$IMG_FILE?offset=1048576" 2> /dev/null | sh -n; echo $?)"
 assert_eq "original image untouched" 0 "$(debugfs -R 'stat /root/.not_logged_in_yet' "$SANDBOX/hl.img?offset=1048576" 2>&1 | grep -c 'Type: regular')"
 cleanup
