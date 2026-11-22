@@ -11,7 +11,7 @@ A private file cloud for trusted friends. Nodes sync your shared files through a
 | Agent | ✓ | | | small script, talks only to its own Syncthing |
 | Aggregator | | ✓ | | `tinycloud-gw aggregate` builds the status views every 5 minutes |
 | `tinycloud` command | ✓ | | | doctor, logs, debug, support, join, path, confirm, leave |
-| `tinycloud-gw` command | | ✓ | | approve, remove, list, status, config, aggregate, view, backup, restore |
+| `tinycloud-gw` command | | ✓ | | approve, remove, list, status, alert, config, aggregate, view, backup, restore |
 | `setup-node.sh` | ✓ | | | installs the node, then sets up updates, firewall, and SSH hardening |
 | `flash-sd.sh` | | | ✓ | writes an Armbian image to a card with a first-boot preset |
 | `tinycloud-dashboard` | | | ✓ | shows the status table, or a page with `--web` |
@@ -176,6 +176,29 @@ Phase 5. Read-only. Lives in `apps/discord-bot/`. Each owner runs their own.
 - Only allowed Discord user IDs, one channel, no open port.
 - Webhook or ntfy alerts still work without it.
 
+## Alerts
+
+The gateway can tell you when something is wrong. It sends one message to a Discord webhook or an ntfy topic. There is no bot and no open port.
+
+- Turn it on with `tinycloud-gw alert set url ADDRESS`, then check it with `tinycloud-gw alert test`. With no address, alerts are off.
+- It runs after every status build and reads the same view the dashboard shows.
+- One message when a problem starts, one when it is resolved, and one reminder a day at 9:00 AM while it is still open. Problems that start together share a message.
+- Every wait time is yours to set, in minutes, hours, or days, for example `tinycloud-gw alert set offline 5m`.
+
+| Problem | Setting | Default wait |
+|---|---|---|
+| Node offline | `offline` | 2 hours |
+| No status reported | `no-status` | 1 day 12 hours (at least 25 hours, nodes report daily) |
+| Low on space | `low-space` | 30 minutes |
+| File name conflicts | `conflicts` | 1 hour |
+| Reboot needed | `reboot` | right away (the node already waits 36 hours) |
+
+- `reminder 9am` sets the reminder hour, or `off` turns reminders off. `recovered no` turns off the resolved messages.
+- Status builds run every 5 minutes, so a wait shorter than that acts like 5 minutes.
+- If a message cannot be sent, it is tried again on the next build.
+- The address is a secret. It is stored in `alerts.conf` (mode 600), included in `tinycloud-gw backup`, and never shown in full or logged.
+- A gateway that is down cannot report itself. That needs a check from outside.
+
 ## Dashboard
 
 `tinycloud-dashboard USER@GATEWAY` runs on the gateway owner's computer. It prints a table made by `tinycloud-gw status` over SSH. With `--watch` it redraws every minute. With `--web` it fetches the full view (`tinycloud-gw view`), writes one self-contained HTML file, and opens it. Each friend sees only their own nodes. The page escapes all text.
@@ -223,5 +246,6 @@ A node shows a warning when it is offline, low on space, has name conflicts, has
 - Min free space and pull order behave on a nearly full card.
 - Gateway RAM stays fine on 1 GB.
 - No secret in any log or support bundle.
+- Alerts reach a real Discord webhook and a real ntfy topic.
 - Everything works on Ubuntu as well as Debian.
 - `tinycloud-gw remove` against a real Syncthing.

@@ -211,7 +211,7 @@ install_stack() {
   run mkdir -p "$GW_HOME/data/syncthing" "$GW_HOME/data/relay" "$GW_HOME/data/disco"
   run chown -R 1000:1000 "$GW_HOME/data"
   run mkdir -p "$GW_HOME/state"
-  run cp "$GW_DIR/docker-compose.yml" "$GW_DIR/lib.sh" "$GW_DIR/VERSION" "$GW_HOME/"
+  run cp "$GW_DIR/docker-compose.yml" "$GW_DIR/lib.sh" "$GW_DIR/alerts.sh" "$GW_DIR/VERSION" "$GW_HOME/"
   run cp "$GW_DIR/bin/tinycloud-gw" "$GW_HOME/tinycloud-gw"
   run chmod 755 "$GW_HOME/tinycloud-gw"
   run ln -sf "$GW_HOME/tinycloud-gw" /usr/local/bin/tinycloud-gw

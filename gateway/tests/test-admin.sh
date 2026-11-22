@@ -424,4 +424,9 @@ printf 'yes\n' | cmd_approve rocky "$N1" reader justin > /dev/null 2>&1
 cmd_aggregate
 assert_jq "unknown connection state is null" "$(cat "$GW_STATE/view.json")" '.nodes[0].online == null'
 
+run_alerts() { printf 'called\n' >> "$FAKE/alerts-called"; return 1; }
+cmd_aggregate
+assert_eq "aggregate runs alerts" called "$(cat "$FAKE/alerts-called")"
+assert_eq "alert failure does not fail aggregate" 0 "$(cmd_aggregate > /dev/null 2>&1; echo $?)"
+
 finish

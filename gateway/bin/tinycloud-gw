@@ -2,6 +2,7 @@
 GW_HOME=${GW_HOME:-/opt/tinycloud-gateway}
 GW_LIB_DIR=${GW_LIB_DIR:-$GW_HOME}
 . "$GW_LIB_DIR/lib.sh"
+. "$GW_LIB_DIR/alerts.sh"
 
 GW_STATE=$GW_HOME/state
 APPROVED=$GW_STATE/approved.json
@@ -22,10 +23,14 @@ usage: tinycloud-gw COMMAND
   aggregate                                  rebuild the status views
   view                                       print the full status view as JSON
   status [--watch]                           print a table of nodes, --watch keeps it updating
+  alert [show|set NAME VALUE|test]           show, change, or test alerts
   backup                                     save the gateway identity
   restore FILE [--yes]                       restore a saved identity
   rotate-token [--yes]                       make a new relay token
   version
+
+alert settings: url ADDRESS|off, offline, no-status, low-space, conflicts, reboot (times like 5m, 60m, 2h, 1d),
+                reminder 9am|off, recovered yes|no
 EOT
 }
 
@@ -339,6 +344,7 @@ do_aggregate() {
       write_view "$ag_dir/view.json" "$(printf '%s' "$ag_full" | jq -c --arg o "$ag_owner" '.nodes |= map(select(.owner == $o))')"
     fi
   done
+  run_alerts || true
 }
 
 cmd_aggregate() {
@@ -482,7 +488,7 @@ cmd_config() {
 }
 
 backup_paths() {
-  for bp_item in .env node-lines.txt state data/syncthing/config data/relay data/disco/cert.pem data/disco/key.pem audit.log; do
+  for bp_item in .env node-lines.txt alerts.conf state data/syncthing/config data/relay data/disco/cert.pem data/disco/key.pem audit.log; do
     if [ -e "$GW_HOME/$bp_item" ]; then
       printf '%s\n' "$bp_item"
     fi
@@ -607,6 +613,7 @@ main() {
     aggregate) cmd_aggregate ;;
     view) cmd_view ;;
     status) cmd_status "$@" ;;
+    alert) cmd_alert "$@" ;;
     backup) cmd_backup ;;
     restore) cmd_restore "$@" ;;
     rotate-token) cmd_rotate_token "$@" ;;
