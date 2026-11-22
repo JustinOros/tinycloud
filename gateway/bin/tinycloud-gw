@@ -288,8 +288,9 @@ node_status() {
       and (.low_space | type == "boolean")
       and (.case_conflicts | type == "number" and . >= 0 and . == floor)
       and (.time | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
-      and (.booted == null or (.booted | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))))
-    | {version, percent_stored, free_bytes, low_space, case_conflicts, reported: .time, booted: (.booted // null)}' "$ns_file" 2> /dev/null)
+      and (.booted == null or (.booted | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")))
+      and (.reboot_required == null or (.reboot_required | type == "boolean")))
+    | {version, percent_stored, free_bytes, low_space, case_conflicts, reported: .time, booted: (.booted // null), reboot_required: (.reboot_required // false)}' "$ns_file" 2> /dev/null)
   if [ -n "$ns_out" ]; then
     printf '%s' "$ns_out"
   else
@@ -369,6 +370,7 @@ STATUS_JQ='
        else
          (if .status.low_space then "Low space" else empty end),
          (if .status.case_conflicts > 0 then "\(.status.case_conflicts) name conflict" + (if .status.case_conflicts == 1 then "" else "s" end) else empty end),
+         (if (.status.reboot_required // false) then "Reboot needed" else empty end),
          (if (now - (.status.reported | fromdateiso8601)) > 129600 then "Stale status" else empty end)
        end) ] | join(", ");
   .nodes | sort_by([.owner, .name])[]

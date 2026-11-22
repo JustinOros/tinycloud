@@ -10,6 +10,11 @@ NODE_NAME=
 OWNER=
 ROLE=
 TZ_NAME=
+FIREWALL=
+SSH_HARDEN=
+CHANNEL=
+UPDATE_ONLY=false
+PREV_TAR=${TC_PREV_TAR:-/var/tmp/tinycloud-node-prev.tar}
 AUTO_UPDATE=
 AUTO_REBOOT=
 REBOOT_TIME=
@@ -86,13 +91,13 @@ ask_yes() {
 }
 
 usage() {
-  say "usage: sh setup-node.sh [--name NAME] [--owner OWNER] [--role ROLE] [--timezone TZ] [--auto-update yes|no] [--auto-reboot yes|no] [--reboot-time TIME] [--config FILE] [--yes] [--dry-run]"
+  say "usage: sh setup-node.sh [--name NAME] [--owner OWNER] [--role ROLE] [--timezone TZ] [--channel stable|testing|off] [--firewall yes|no] [--ssh-hardening yes|no] [--auto-update yes|no] [--auto-reboot yes|no] [--reboot-time TIME] [--config FILE] [--yes] [--dry-run]"
 }
 
 parse_args() {
   while [ $# -gt 0 ]; do
     case $1 in
-      --name | --owner | --role | --timezone | --config | --auto-update | --auto-reboot | --reboot-time)
+      --name | --owner | --role | --timezone | --config | --auto-update | --auto-reboot | --reboot-time | --firewall | --ssh-hardening | --channel)
         [ $# -ge 2 ] || { usage; return 1; }
         case $1 in
           --name) NODE_NAME=$2 ;;
@@ -103,6 +108,9 @@ parse_args() {
           --auto-update) AUTO_UPDATE=$2 ;;
           --auto-reboot) AUTO_REBOOT=$2 ;;
           --reboot-time) REBOOT_TIME=$2 ;;
+          --firewall) FIREWALL=$2 ;;
+          --channel) CHANNEL=$2 ;;
+          --ssh-hardening) SSH_HARDEN=$2 ;;
         esac
         shift 2
         ;;
@@ -114,12 +122,19 @@ parse_args() {
         DRY_RUN=true
         shift
         ;;
+      --update)
+        UPDATE_ONLY=true
+        shift
+        ;;
       *)
         usage
         return 1
         ;;
     esac
   done
+  if [ "$UPDATE_ONLY" = true ]; then
+    return 0
+  fi
   if [ "$ASSUME_YES" = true ] && { [ -z "$NODE_NAME" ] || [ -z "$OWNER" ] || [ -z "$CONFIG_FILE" ]; }; then
     fail "--yes needs --name, --owner, and --config"
   fi
@@ -212,6 +227,7 @@ find_tree() {
 load_lib() {
   GW_DIR=$SRC/gateway
   . "$GW_DIR/lib.sh"
+  . "$SRC/node/harden/harden.sh"
 }
 
 valid_tz_name() {
@@ -361,6 +377,74 @@ choose_updates() {
     valid_reboot_time "$REBOOT_TIME" || { fail "bad reboot time"; return 1; }
     REBOOT_TIME=$(time_24h "$REBOOT_TIME")
   fi
+}
+
+choose_yes_no() {
+  cyn_var=$1
+  eval "cyn_now=\$$cyn_var"
+  case $cyn_now in
+    yes | no) return 0 ;;
+    '') ;;
+    *) fail "$2 must be yes or no"; return 1 ;;
+  esac
+  if [ "$ASSUME_YES" = true ]; then
+    cyn_now=no
+  elif ask_yes "$3" y; then
+    cyn_now=yes
+  else
+    cyn_now=no
+  fi
+  eval "$cyn_var=\$cyn_now"
+}
+
+channel_name() {
+  case $1 in
+    1 | stable) printf 'stable' ;;
+    2 | testing) printf 'testing' ;;
+    3 | off) printf 'off' ;;
+  esac
+}
+
+valid_channel_choice() {
+  [ -n "$(channel_name "$1")" ]
+}
+
+choose_channel() {
+  if [ -n "$CHANNEL" ]; then
+    valid_channel_choice "$CHANNEL" || { fail "--channel must be stable, testing, or off"; return 1; }
+    CHANNEL=$(channel_name "$CHANNEL")
+    return 0
+  fi
+  [ "$ASSUME_YES" = true ] && return 0
+  say "Update TinyCloud itself every night:"
+  say "  1) stable   tested releases (recommended)"
+  say "  2) testing  newest changes, may break"
+  say "  3) off      update by hand"
+  choose_value "Which channel? (number)" 1 valid_channel_choice || return 1
+  CHANNEL=$(channel_name "$ANSWER")
+}
+
+choose_hardening() {
+  choose_yes_no FIREWALL --firewall "Turn on the firewall (blocks everything except SSH from your local network)?" || return 1
+  choose_yes_no SSH_HARDEN --ssh-hardening "Harden SSH (no password login when a key is installed, plus fail2ban)?" || return 1
+  choose_channel || return 1
+}
+
+harden_summary() {
+  if [ "$FIREWALL" = yes ]; then
+    printf 'firewall on'
+  else
+    printf 'firewall unchanged'
+  fi
+  if [ "$SSH_HARDEN" = yes ]; then
+    printf ', SSH hardened'
+  else
+    printf ', SSH unchanged'
+  fi
+  case $CHANNEL in
+    stable | testing) printf ', nightly self-update (%s)' "$CHANNEL" ;;
+    off) printf ', no self-update' ;;
+  esac
 }
 
 update_summary() {
@@ -541,6 +625,9 @@ show_plan() {
   if [ -n "$AUTO_UPDATE" ]; then
     say "Updates:  $(update_summary)"
   fi
+  if [ -n "$FIREWALL$SSH_HARDEN$CHANNEL" ]; then
+    say "Security: $(harden_summary)"
+  fi
   say "System:   $os_id $os_version"
   say ""
 }
@@ -570,9 +657,59 @@ install_files() {
     return 0
   fi
   tar -C "$SRC/node" --exclude=./data --exclude=./tinycloud.conf --exclude=./tests -cf - . | tar -C "$NODE_HOME" -xf - || return 1
-  mkdir -p "$NODE_HOME/data/library"
+  mkdir -p "$NODE_HOME/data/library" "$NODE_HOME/host"
   chown 1000:1000 "$NODE_HOME/data/library" 2> /dev/null || true
   chmod +x "$NODE_HOME/bin/tinycloud"
+  if cp "$SRC/setup-node.sh" "$NODE_HOME/setup-node.sh.new" 2> /dev/null; then
+    chmod 755 "$NODE_HOME/setup-node.sh.new"
+    mv -f "$NODE_HOME/setup-node.sh.new" "$NODE_HOME/setup-node.sh"
+  fi
+}
+
+backup_node() {
+  tar -C "$NODE_HOME" --exclude=./data --exclude=./tinycloud.conf -cf "$PREV_TAR" .
+}
+
+restore_node() {
+  [ -s "$PREV_TAR" ] || return 1
+  tar -C "$NODE_HOME" -xf "$PREV_TAR" || return 1
+  docker compose --project-directory "$NODE_HOME" up -d --build
+}
+
+node_healthy() {
+  nh_running=$(docker compose --project-directory "$NODE_HOME" ps --status running --services 2> /dev/null)
+  for nh_name in syncthing agent web; do
+    printf '%s\n' "$nh_running" | grep -qx "$nh_name" || return 1
+  done
+}
+
+update_main() {
+  ensure_root "$@" || return 1
+  if [ ! -f "$NODE_HOME/tinycloud.conf" ]; then
+    fail "no node is set up in $NODE_HOME"
+    return 1
+  fi
+  find_tree || return 1
+  load_lib
+  say "Updating TinyCloud from $TC_REF"
+  backup_node || { fail "could not back up the current version"; return 1; }
+  install_files || { restore_node; fail "could not install the new version"; return 1; }
+  docker compose --project-directory "$NODE_HOME" pull --ignore-buildable > /dev/null 2>&1 || say "Could not check for newer container images."
+  if ! docker compose --project-directory "$NODE_HOME" up -d --build; then
+    say "The new version did not start. Going back to the previous one."
+    restore_node
+    fail "update failed, previous version restored"
+    return 1
+  fi
+  sleep "${SETUP_HEALTH_WAIT:-45}"
+  if ! node_healthy; then
+    say "The new version is not healthy. Going back to the previous one."
+    restore_node
+    fail "update failed, previous version restored"
+    return 1
+  fi
+  sh "$NODE_HOME/harden/host-status.sh" 2> /dev/null
+  say "Update done."
 }
 
 write_config() {
@@ -683,6 +820,10 @@ finish_up() {
 
 main() {
   parse_args "$@" || return 1
+  if [ "$UPDATE_ONLY" = true ]; then
+    update_main "$@"
+    return $?
+  fi
   open_input || return 1
   say "TinyCloud node setup"
   say ""
@@ -699,8 +840,9 @@ main() {
     choose_basics || return 1
     choose_gateway || return 1
   fi
-  if [ "$KEEP_CONFIG" != true ] || [ -n "$AUTO_UPDATE" ]; then
+  if [ "$KEEP_CONFIG" != true ] || [ -n "$AUTO_UPDATE$FIREWALL$SSH_HARDEN$CHANNEL" ]; then
     choose_updates || return 1
+    choose_hardening || return 1
   fi
   show_plan
   if ! ask_yes "Continue?" y; then
@@ -711,6 +853,10 @@ main() {
   install_files || return 1
   write_config || return 1
   setup_updates || return 1
+  setup_host_status || return 1
+  setup_firewall || return 1
+  setup_ssh_hardening || return 1
+  setup_autoupdate || return 1
   link_command || return 1
   setup_user
   start_node || return 1

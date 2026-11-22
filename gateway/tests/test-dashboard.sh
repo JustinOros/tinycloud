@@ -182,4 +182,6 @@ EOT
   assert_eq "offline node has no uptime in js" 1 "$(printf '%s\n' "$js" | tail -1 | tr '|' '\n' | grep -c ' days$')"
 fi
 
+assert_contains "web page flags a needed reboot" "$(cat "$ROOT/dashboard/tinycloud-dashboard")" "Reboot needed"
+
 finish

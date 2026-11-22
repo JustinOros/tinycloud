@@ -247,13 +247,15 @@ printf 'yes\n' | cmd_approve rocky "$N1" reader justin > /dev/null 2>&1
 printf 'yes\n' | cmd_approve grace "$N2" anchor justin > /dev/null 2>&1
 printf 'yes\n' | cmd_approve brie "$N3" reader finn > /dev/null 2>&1
 printf '{"connections":{"%s":{"connected":true},"%s":{"connected":false},"%s":{"connected":true}}}' "$N1" "$N2" "$N3" > "$FAKE/connections.json"
-printf '{"v":1,"name":"rocky","role":"reader","version":"0.1.0","percent_stored":42,"free_bytes":5000000000,"low_space":false,"case_conflicts":1,"time":"2026-11-21T19:00:00Z"}' > "$FOLDERS_DIR/tc-status-rocky/status.json"
+printf '{"v":1,"name":"rocky","role":"reader","version":"0.1.0","percent_stored":42,"free_bytes":5000000000,"low_space":false,"case_conflicts":1,"time":"2026-11-21T19:00:00Z","reboot_required":true}' > "$FOLDERS_DIR/tc-status-rocky/status.json"
 printf '{"v":1,"name":"brie","role":"hacker","version":"0.1.0","percent_stored":150,"free_bytes":1,"low_space":false,"case_conflicts":0,"time":"2026-11-21T19:00:00Z"}' > "$FOLDERS_DIR/tc-status-brie/status.json"
 cmd_aggregate
 full=$(cat "$GW_STATE/view.json")
 assert_jq "view shape" "$full" '.version == 1 and (.generated | test("^[0-9]{4}-")) and (.nodes | length) == 3'
+assert_jq "reboot flag passed through" "$full" '(.nodes[] | select(.name == "rocky") | .status.reboot_required) == true'
+assert_jq "older nodes default to no reboot flag" "$full" '(.nodes[] | select(.name == "brie") | .status) == null or (.nodes[] | select(.name == "brie") | .status.reboot_required) == false'
 assert_jq "rocky online with status" "$full" '(.nodes[] | select(.name == "rocky")) | .online == true and .status.percent_stored == 42 and .status.case_conflicts == 1 and .status.reported == "2026-11-21T19:00:00Z" and .role == "reader"'
-assert_jq "node status keeps only known fields" "$full" '(.nodes[] | select(.name == "rocky") | .status | keys | sort) == ["booted","case_conflicts","free_bytes","low_space","percent_stored","reported","version"]'
+assert_jq "node status keeps only known fields" "$full" '(.nodes[] | select(.name == "rocky") | .status | keys | sort) == ["booted","case_conflicts","free_bytes","low_space","percent_stored","reboot_required","reported","version"]'
 assert_jq "grace offline with no status" "$full" '(.nodes[] | select(.name == "grace")) | .online == false and .status == null'
 assert_jq "invalid status rejected" "$full" '(.nodes[] | select(.name == "brie")) | .status == null and .role == "reader"'
 assert_jq "justin view holds only his nodes" "$(cat "$FOLDERS_DIR/tc-view-justin/view.json")" '(.nodes | length) == 2 and all(.nodes[]; .owner == "justin")'
@@ -300,10 +302,12 @@ cat > "$GW_STATE/view.json" << EOT
 {"name":"grace","role":"contributor","owner":"justin","online":false,"status":null},
 {"name":"adrian","role":"contributor","owner":"justin","online":true,"status":{"version":"0.1.0","percent_stored":100,"free_bytes":167600000000,"low_space":false,"case_conflicts":0,"reported":"$nowiso"}},
 {"name":"brie","role":"reader","owner":"finn","online":true,"status":{"version":"0.1.0","percent_stored":40,"free_bytes":12884901888,"low_space":true,"case_conflicts":2,"reported":"2020-01-01T00:00:00Z"}},
-{"name":"odd","role":"reader","owner":"zed","online":null,"status":null}]}
+{"name":"odd","role":"reader","owner":"zed","online":null,"status":null},
+{"name":"stuck","role":"reader","owner":"zed","online":true,"status":{"version":"0.1.0","percent_stored":100,"free_bytes":1000000000,"low_space":false,"case_conflicts":0,"reboot_required":true,"reported":"$nowiso"}}]}
 EOT
 st=$(cmd_status)
-assert_contains "status summary" "$st" "TinyCloud: 4 nodes, 2 online, 3 with warnings. Updated just now."
+assert_contains "status shows reboot needed" "$st" "Reboot needed"
+assert_contains "status summary" "$st" "TinyCloud: 5 nodes, 3 online, 4 with warnings. Updated just now."
 assert_contains "status header" "$st" "NODE"
 assert_contains "status shows free space" "$st" "156.1 GB"
 assert_contains "status shows exact gigabytes" "$st" "12.0 GB"
@@ -315,7 +319,7 @@ assert_contains "status shows days ago" "$st" "days ago"
 assert_contains "status shows no status" "$st" "No status yet"
 assert_contains "status shows unknown" "$st" "Unknown"
 assert_eq "status has no color by default" 0 "$(printf '%s' "$st" | grep -c "$(printf '\033')")"
-assert_eq "status sorted by owner then name" "brie adrian grace odd" "$(printf '%s\n' "$st" | awk 'NR > 3 {printf "%s ", $1}' | sed 's/ $//')"
+assert_eq "status sorted by owner then name" "brie adrian grace odd stuck" "$(printf '%s\n' "$st" | awk 'NR > 3 {printf "%s ", $1}' | sed 's/ $//')"
 stc=$(cmd_status --color)
 assert_eq "status color adds escapes" 1 "$([ "$(printf '%s' "$stc" | grep -c "$(printf '\033')")" -gt 0 ] && echo 1 || echo 0)"
 assert_eq "bad status flag fails" 1 "$(cmd_status --bogus > /dev/null 2>&1 && echo 0 || echo 1)"

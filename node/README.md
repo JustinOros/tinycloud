@@ -14,6 +14,10 @@ Your files live in `data/library`, and the setup makes a shortcut named `tinyclo
 
 Setup also asks whether to install Debian security updates automatically (default yes), whether to reboot automatically when an update needs it (default yes), and what time to do it (default 3:00 AM, the board's local time). Skip the questions with `--auto-update yes|no`, `--auto-reboot yes|no`, and `--reboot-time "3:00 AM"`. With `--yes` and no flags, updates are left as they are.
 
+It also offers a firewall (default yes) that blocks everything inbound except SSH from your local network, and SSH hardening (default yes) that turns off password login when a key is installed, keeps root key-only, and adds fail2ban. Flags: `--firewall yes|no` and `--ssh-hardening yes|no`. If your SSH comes from outside a private network (not 10.x, 172.16-31.x, 192.168.x, or Tailscale), the firewall would block you, so say no to it.
+
+Setup also asks which channel to follow for nightly updates of TinyCloud itself at about 4:00 AM: `stable` (default), `testing` (the `main` branch), or `off`. Flag: `--channel stable|testing|off`. An update backs up the old version, pulls newer container images, and rolls back by itself if the node does not come up healthy. The dashboard shows a "Reboot needed" warning when an update has needed a reboot for more than 36 hours. To publish a release to the stable channel: `git push origin main:stable`.
+
 ## Prepare an SD card
 
 For a Raspberry Pi or Orange Pi, `tools/flash-sd.sh` writes the operating system to an SD card and reads it back to check it. Run it on your Mac or Linux computer with the card in a reader:

@@ -58,14 +58,27 @@ collect_status() {
   fi
   st_conflicts=$(count_case_conflicts "$TC_LIBRARY_DIR")
   collect_booted
+  collect_reboot
+}
+
+collect_reboot() {
+  st_reboot=false
+  cr_at=$(cat "${TC_REBOOT_FLAG:-/host/reboot_required}" 2> /dev/null)
+  cr_up=$(cut -d . -f 1 "${TC_UPTIME_FILE:-/proc/uptime}" 2> /dev/null)
+  if valid_int "$cr_at" && valid_int "$cr_up"; then
+    cr_now=$(date +%s)
+    if [ "$cr_at" -gt $((cr_now - cr_up)) ] && [ $((cr_now - cr_at)) -ge $((${TC_REBOOT_WARN_HOURS:-36} * 3600)) ]; then
+      st_reboot=true
+    fi
+  fi
 }
 
 build_status_json() {
   jq -nc --arg name "$(conf_get NODE_NAME)" --arg role "$(conf_get ROLE reader)" --arg version "$TC_VERSION" \
     --argjson pct "$st_percent" --argjson free "$st_free_bytes" --argjson low "$st_low" \
-    --argjson cc "$st_conflicts" --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg booted "$st_booted" \
+    --argjson cc "$st_conflicts" --argjson rr "$st_reboot" --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg booted "$st_booted" \
     '{v: 1, name: $name, role: $role, version: $version, percent_stored: $pct, free_bytes: $free,
-      low_space: $low, case_conflicts: $cc, time: $time}
+      low_space: $low, case_conflicts: $cc, reboot_required: $rr, time: $time}
      + (if $booted == "" then {} else {booted: $booted} end)'
 }
 
@@ -81,6 +94,7 @@ should_write_status() {
     or $a.version != $b.version
     or $a.role != $b.role
     or $a.case_conflicts != $b.case_conflicts
+    or (($a.reboot_required // false) != ($b.reboot_required // false))
     or (($a | boot) as $x | ($b | boot) as $y | (($x == null) != ($y == null)) or ($x != null and (($x - $y) | absval) > 120))
     or ($now - $last) >= 86400' > /dev/null
 }

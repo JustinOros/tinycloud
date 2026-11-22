@@ -39,7 +39,7 @@ chmod +x "$SANDBOX/fakebin/dpkg"
 {
   printf 'adrian\njustin\ncontributor\nAmerica/Phoenix\n'
   cat "$SANDBOX/lines"
-  printf '\ny\ny\n3:00 AM\ny\n'
+  printf '\ny\ny\n3:00 AM\ny\ny\n1\ny\n'
 } > "$SANDBOX/in1"
 out=$(run_setup debian13 "$SANDBOX/in1" --dry-run)
 assert_contains "banner" "$out" "TinyCloud node setup"
@@ -49,6 +49,8 @@ assert_contains "plan gateway" "$out" "Gateway:  gw.example.com"
 assert_contains "plan timezone" "$out" "Timezone: America/Phoenix"
 assert_contains "plan updates" "$out" "Updates:  automatic security updates, reboot at 3:00 AM when needed"
 assert_contains "updates config planned" "$out" "52tinycloud-unattended"
+assert_contains "channel planned" "$out" "Security: firewall on, SSH hardened, nightly self-update (stable)"
+assert_contains "timer planned" "$out" "tinycloud-update.timer (channel stable, branch stable)"
 assert_contains "dry run finishes" "$out" "dry run finished, nothing changed"
 assert_not_contains "token never printed" "$out" "tok123"
 assert_eq "dry run writes nothing" 0 "$([ -e "$NODE_HOME" ] && echo 1 || echo 0)"
@@ -68,6 +70,13 @@ out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin 
 assert_contains "reboot needs updates" "$out" "--auto-reboot needs automatic updates"
 out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --config "$SANDBOX/lines" --auto-update yes --reboot-time 25:00)
 assert_contains "bad reboot time refused" "$out" "bad reboot time"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --config "$SANDBOX/lines" --channel testing --firewall yes --ssh-hardening no)
+assert_contains "channel and security flags" "$out" "Security: firewall on, SSH unchanged, nightly self-update (testing)"
+assert_contains "testing channel follows main" "$out" "channel testing, branch main"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --config "$SANDBOX/lines" --channel bogus)
+assert_contains "bad channel refused" "$out" "--channel must be stable, testing, or off"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --config "$SANDBOX/lines" --firewall maybe)
+assert_contains "bad firewall flag refused" "$out" "--firewall must be yes or no"
 out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --config "$SANDBOX/lines" --auto-update maybe)
 assert_contains "bad update flag refused" "$out" "--auto-update must be yes or no"
 
@@ -103,25 +112,28 @@ assert_contains "debian 11 refused" "$out" "unsupported system"
   printf 'bad name\nadrian\njustin\nbogus\nreader\nUTC\n'
   printf 'GATEWAY_HOST=gw.example.com\n\n'
   cat "$SANDBOX/lines"
-  printf '\nn\ny\n'
+  printf '\nn\ny\ny\n3\ny\n'
 } > "$SANDBOX/in2"
 out=$(run_setup debian13 "$SANDBOX/in2" --dry-run)
 assert_contains "retries a bad name" "$out" "That is not valid."
 assert_contains "retries incomplete gateway lines" "$out" "GATEWAY_ID is missing or not valid."
 assert_contains "ends with a valid plan" "$out" "Node:     adrian (owner justin, role reader)"
 assert_contains "no auto updates plan" "$out" "Updates:  not automatic"
+assert_contains "security plan" "$out" "Security: firewall on, SSH hardened, no self-update"
+assert_contains "firewall planned" "$out" "+ systemctl enable --now tinycloud-firewall"
+assert_contains "off channel removes the timer" "$out" "+ remove the TinyCloud self-update timer"
 
-printf 'adrian\njustin\n2\nUTC\n%s\n\nn\ny\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in4"
+printf 'adrian\njustin\n2\nUTC\n%s\n\nn\nn\nn\n3\ny\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in4"
 out=$(run_setup debian13 "$SANDBOX/in4" --dry-run)
 assert_contains "role menu lists choices" "$out" "2) contributor  sends and receives"
 assert_contains "role number picks the role" "$out" "role contributor"
 
-printf 'adrian\njustin\n9\n\nUTC\n%s\n\nn\ny\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in5"
+printf 'adrian\njustin\n9\n\nUTC\n%s\n\nn\nn\nn\n3\ny\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in5"
 out=$(run_setup debian13 "$SANDBOX/in5" --dry-run)
 assert_contains "bad role number retried" "$out" "That is not valid."
 assert_contains "blank role defaults to reader" "$out" "role reader"
 
-printf 'adrian\njustin\nreader\nUTC\n%s\n\nn\nn\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in3"
+printf 'adrian\njustin\nreader\nUTC\n%s\n\nn\nn\nn\n3\nn\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in3"
 out=$(run_setup debian13 "$SANDBOX/in3" --dry-run)
 assert_contains "declined" "$out" "cancelled"
 assert_not_contains "declined runs nothing" "$out" "dry run finished"

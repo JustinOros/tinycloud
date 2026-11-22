@@ -45,6 +45,7 @@ services:
       - ./tinycloud.conf:/config/tinycloud.conf:ro
       - syncthing-config:/syncthing-config:ro
       - ./data/library:/data/library:ro
+      - ./host:/host:ro
       - system:/data/system
       - state:/state
       - logs:/logs

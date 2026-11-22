@@ -151,6 +151,7 @@ function flags(n) {
   }
   if (s.low_space) list.push(['Low space', 'bad']);
   if (s.case_conflicts > 0) list.push([s.case_conflicts + ' name conflict' + (s.case_conflicts === 1 ? '' : 's'), 'warn']);
+  if (s.reboot_required) list.push(['Reboot needed', 'warn']);
   if (Date.now() - Date.parse(s.reported) > STALE_MS) list.push(['Stale status', 'warn']);
   return list;
 }

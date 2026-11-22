@@ -27,7 +27,7 @@ main > "$FAKE_DIR/out" 2>&1
 assert_eq "main ok" 0 "$?"
 status=$(cat "$STATUS_DIR/status.json")
 assert_jq "status fields" "$status" '.v == 1 and .name == "rocky" and .role == "anchor" and .percent_stored == 50 and .case_conflicts == 1 and .low_space == false and (.free_bytes | type) == "number"'
-assert_jq "status has only known keys" "$status" '(keys | sort) == ["booted","case_conflicts","free_bytes","low_space","name","percent_stored","role","time","v","version"]'
+assert_jq "status has only known keys" "$status" '(keys | sort) == ["booted","case_conflicts","free_bytes","low_space","name","percent_stored","reboot_required","role","time","v","version"]'
 assert_eq "no temp file left behind" 0 "$(find "$STATUS_DIR" -name '*tmp*' | wc -l | tr -d ' ')"
 assert_eq "local copy written" 1 "$(test -f "$TC_STATE_DIR/status.local.json" && echo 1 || echo 0)"
 
@@ -71,6 +71,33 @@ main > "$FAKE_DIR/out" 2>&1
 assert_jq "no booted when uptime unreadable" "$(cat "$STATUS_DIR/status.json")" 'has("booted") | not'
 unset TC_UPTIME_FILE TC_PID1_STAT
 
+TC_UPTIME_FILE=$SANDBOX/uptime2
+TC_REBOOT_FLAG=$SANDBOX/rebootflag
+export TC_UPTIME_FILE TC_REBOOT_FLAG
+now_r=$(date +%s)
+printf '200000.00 1.00\n' > "$TC_UPTIME_FILE"
+collect_reboot
+assert_eq "no flag file means no reboot needed" false "$st_reboot"
+printf '%s\n' $((now_r - 3600)) > "$TC_REBOOT_FLAG"
+collect_reboot
+assert_eq "recent pending reboot is not flagged yet" false "$st_reboot"
+printf '%s\n' $((now_r - 40 * 3600)) > "$TC_REBOOT_FLAG"
+collect_reboot
+assert_eq "old pending reboot is flagged" true "$st_reboot"
+TC_REBOOT_WARN_HOURS=100
+export TC_REBOOT_WARN_HOURS
+collect_reboot
+assert_eq "warn threshold is adjustable" false "$st_reboot"
+unset TC_REBOOT_WARN_HOURS
+printf '3600.00 1.00\n' > "$TC_UPTIME_FILE"
+collect_reboot
+assert_eq "flag older than the last boot is stale" false "$st_reboot"
+printf 'junk\n' > "$TC_REBOOT_FLAG"
+printf '200000.00 1.00\n' > "$TC_UPTIME_FILE"
+collect_reboot
+assert_eq "junk flag ignored" false "$st_reboot"
+unset TC_UPTIME_FILE TC_REBOOT_FLAG
+
 setup
 printf '{"state":"idle","globalBytes":0,"localBytes":0}' > "$FAKE_DIR/dbstatus.json"
 main > "$FAKE_DIR/out" 2>&1
@@ -83,6 +110,10 @@ assert_jq "low space flagged" "$(cat "$STATUS_DIR/status.json")" '.low_space == 
 A='{"percent_stored":50,"low_space":false,"version":"0.1.0","role":"anchor","case_conflicts":0}'
 same_ok() { should_write_status "$1" "$2" "$3" "$4" && echo yes || echo no; }
 assert_eq "no previous writes" yes "$(same_ok '' "$A" 1000 1000)"
+R1='{"percent_stored":50,"low_space":false,"version":"0.1.0","role":"anchor","case_conflicts":0,"reboot_required":false}'
+R2='{"percent_stored":50,"low_space":false,"version":"0.1.0","role":"anchor","case_conflicts":0,"reboot_required":true}'
+assert_eq "reboot flag change writes" yes "$(same_ok "$R1" "$R2" 1000 900)"
+assert_eq "same reboot flag does not write" no "$(same_ok "$R1" "$R1" 1000 900)"
 assert_eq "same status skips" no "$(same_ok "$A" "$A" 1000 900)"
 assert_eq "1 point skips" no "$(same_ok "$A" '{"percent_stored":51,"low_space":false,"version":"0.1.0","role":"anchor","case_conflicts":0}' 1000 900)"
 assert_eq "2 points writes" yes "$(same_ok "$A" '{"percent_stored":52,"low_space":false,"version":"0.1.0","role":"anchor","case_conflicts":0}' 1000 900)"
