@@ -4,17 +4,19 @@ A private file cloud for trusted friends. Nodes sync your shared files through a
 
 ## Parts
 
-| Part | Where | Job |
-|---|---|---|
-| Syncthing | every node and the gateway | syncs files |
-| Relay and discovery | gateway | lets nodes find and reach each other |
-| Agent | every node | small script, talks only to its own Syncthing |
-| Aggregator | gateway | `tinycloud-gw aggregate` builds the status views every 5 minutes |
-| `tinycloud` command | nodes | doctor, logs, debug, support, join, path, confirm, leave |
-| `tinycloud-gw` command | gateway | approve, remove, list, status, config, aggregate, view, backup, restore |
-| `setup-node.sh` | Docker hosts and boards | installs the node, then sets up updates, firewall, and SSH hardening |
-| `flash-sd.sh` | owner's computer | writes an Armbian image to a card with a first-boot preset |
-| `tinycloud-dashboard` | gateway owner's computer | shows the status table, or a page with `--web` |
+| Part | Node | Gateway | PC | Job |
+|---|---|---|---|---|
+| Syncthing | ✓ | ✓ | | syncs files |
+| Relay and discovery | | ✓ | | lets nodes find and reach each other |
+| Agent | ✓ | | | small script, talks only to its own Syncthing |
+| Aggregator | | ✓ | | `tinycloud-gw aggregate` builds the status views every 5 minutes |
+| `tinycloud` command | ✓ | | | doctor, logs, debug, support, join, path, confirm, leave |
+| `tinycloud-gw` command | | ✓ | | approve, remove, list, status, config, aggregate, view, backup, restore |
+| `setup-node.sh` | ✓ | | | installs the node, then sets up updates, firewall, and SSH hardening |
+| `flash-sd.sh` | | | ✓ | writes an Armbian image to a card with a first-boot preset |
+| `tinycloud-dashboard` | | | ✓ | shows the status table, or a page with `--web` |
+
+PC means the owner's own computer, such as a Mac.
 
 The gateway never stores the library. Anchor nodes hold full copies.
 
