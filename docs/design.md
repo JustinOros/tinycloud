@@ -283,6 +283,7 @@ Test with a second gateway and a test node standing in for a friend's cloud.
 - The heartbeat pings healthchecks.io, which posts to Discord.
 - `tinycloud-gw backup` and `restore` work on a real server: a gateway identity restored onto a second Linode in another region matched the original, and restoring the second server's own backup put it back.
 - The weekly backup timer works on the real gateway: its service saved a private backup on its own.
+- A missed heartbeat reaches Discord: with the aggregate timer stopped, healthchecks.io posted DOWN after the grace time, and UP when the timer came back.
 - Gateway RAM is fine on 1 GB with 2 nodes: the three containers use about 58 MB and over half the memory is free. Not yet measured with many nodes.
 - Per-owner folders work on real nodes: each owner's books sync between a Docker node on Unraid and an Orange Pi, and a delete on one node reaches the other.
 - The optional SMB share works on an Orange Pi: a file copied from a Mac over SMB arrived on the other node, and only the TinyCloud share is listed.
@@ -297,5 +298,4 @@ Test with a second gateway and a test node standing in for a friend's cloud.
 - No secret in any log or support bundle.
 - Alerts reach a real ntfy topic.
 - The gateway reboot alert on a real server.
-- A missed heartbeat reaches Discord.
 - Everything works on Ubuntu as well as Debian.
