@@ -134,6 +134,11 @@ assert_contains "aggregate service runs the command" "$(render_aggregate_service
 assert_contains "aggregate service is oneshot" "$(render_aggregate_service)" "Type=oneshot"
 assert_contains "aggregate timer every 5 minutes" "$(render_aggregate_timer)" "OnUnitActiveSec=5min"
 assert_contains "aggregate timer installs" "$(render_aggregate_timer)" "WantedBy=timers.target"
+assert_contains "backup service runs the auto backup" "$(render_backup_service)" "ExecStart=/usr/local/bin/tinycloud-gw backup --auto"
+assert_contains "backup service is oneshot" "$(render_backup_service)" "Type=oneshot"
+assert_contains "backup timer is weekly" "$(render_backup_timer)" "OnCalendar=Sun"
+assert_contains "backup timer catches up after downtime" "$(render_backup_timer)" "Persistent=true"
+assert_contains "backup timer installs" "$(render_backup_timer)" "WantedBy=timers.target"
 DRY_RUN=true
 agg=$(setup_aggregate)
 assert_contains "aggregate service file planned" "$agg" "write /etc/systemd/system/tinycloud-aggregate.service"

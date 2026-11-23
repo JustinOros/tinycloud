@@ -179,6 +179,21 @@ render_env() {
   printf 'GATEWAY_HOST=%s\nRELAY_TOKEN=%s\n' "$HOST" "$1"
 }
 
+render_backup_service() {
+  printf '[Unit]\nDescription=TinyCloud gateway backup\n\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/tinycloud-gw backup --auto\n'
+}
+
+render_backup_timer() {
+  printf '[Unit]\nDescription=TinyCloud gateway backup every week\n\n[Timer]\nOnCalendar=Sun *-*-* 03:30:00\nRandomizedDelaySec=30min\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n'
+}
+
+setup_backup() {
+  render_backup_service | put_file /etc/systemd/system/tinycloud-backup.service 644
+  render_backup_timer | put_file /etc/systemd/system/tinycloud-backup.timer 644
+  run systemctl daemon-reload
+  run systemctl enable --now tinycloud-backup.timer
+}
+
 setup_aggregate() {
   render_aggregate_service | put_file /etc/systemd/system/tinycloud-aggregate.service 644
   render_aggregate_timer | put_file /etc/systemd/system/tinycloud-aggregate.timer 644
@@ -331,6 +346,7 @@ main() {
   install_stack
   configure_syncthing
   setup_aggregate
+  setup_backup
   print_summary
 }
 

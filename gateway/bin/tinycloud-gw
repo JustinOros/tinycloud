@@ -31,7 +31,7 @@ usage: tinycloud-gw COMMAND
   view                                       print the full status view as JSON
   status [--watch]                           print a table of nodes, --watch keeps it updating
   alert [show|set NAME VALUE|test]           show, change, or test alerts
-  backup                                     save the gateway identity
+  backup                                     save the gateway identity (a timer also does it weekly)
   restore FILE [--yes]                       restore a saved identity
   rotate-token [--yes]                       make a new relay token
   version
@@ -505,16 +505,30 @@ backup_paths() {
   done
 }
 
+backup_fail() {
+  log ERROR "$1"
+  if [ "$bk_auto" = 1 ]; then
+    alert_send "TinyCloud: the weekly gateway backup failed on $(hostname): $1" || true
+  fi
+  return 1
+}
+
 cmd_backup() {
+  bk_auto=0
+  [ "${1:-}" = --auto ] && bk_auto=1
   bk_paths=$(backup_paths)
   if [ -z "$bk_paths" ]; then
-    log ERROR "nothing to back up in $GW_HOME"
+    backup_fail "nothing to back up in $GW_HOME"
     return 1
   fi
-  (umask 077 && mkdir -p "$BACKUP_DIR")
+  (umask 077 && mkdir -p "$BACKUP_DIR") || { backup_fail "could not create $BACKUP_DIR"; return 1; }
   chmod 700 "$BACKUP_DIR"
   bk_out="$BACKUP_DIR/tinycloud-gateway-$(date +%Y%m%d-%H%M%S).tar.gz"
-  printf '%s\n' "$bk_paths" | (umask 077 && tar czf "$bk_out" --exclude='data/syncthing/config/index-*' -C "$GW_HOME" -T -)
+  if ! printf '%s\n' "$bk_paths" | (umask 077 && tar czf "$bk_out" --exclude='data/syncthing/config/index-*' -C "$GW_HOME" -T -); then
+    rm -f "$bk_out"
+    backup_fail "could not write the backup"
+    return 1
+  fi
   chmod 600 "$bk_out"
   bk_old=$(find "$BACKUP_DIR" -maxdepth 1 -name 'tinycloud-gateway-*.tar.gz' | sort -r | tail -n +11)
   for bk_file in $bk_old; do
@@ -522,6 +536,9 @@ cmd_backup() {
   done
   audit "backup $bk_out"
   printf 'Saved: %s\n' "$bk_out"
+  if [ "$bk_auto" = 1 ]; then
+    return 0
+  fi
   bk_host=$(sed -n 's/^GATEWAY_HOST=//p' "$GW_HOME/.env" 2> /dev/null | tail -n 1)
   printf 'It holds secrets. Copy it off this server, for example:\n  scp root@%s:%s .\n' "${bk_host:-GATEWAY}" "$bk_out"
 }
@@ -627,7 +644,7 @@ main() {
     view) cmd_view ;;
     status) cmd_status "$@" ;;
     alert) cmd_alert "$@" ;;
-    backup) cmd_backup ;;
+    backup) cmd_backup "$@" ;;
     restore) cmd_restore "$@" ;;
     rotate-token) cmd_rotate_token "$@" ;;
     version) echo "$GW_VERSION" ;;

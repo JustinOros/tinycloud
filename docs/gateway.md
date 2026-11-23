@@ -37,7 +37,7 @@ Check that the code it shows matches the one on the node, then type `yes`.
 | `tinycloud-gw link add NAME CODE` | links a cloud, or updates a link, after asking what to send and receive |
 | `tinycloud-gw link list` | linked clouds |
 | `tinycloud-gw link remove NAME` | unlinks a cloud |
-| `tinycloud-gw backup` | saves the gateway identity to `/root/tinycloud-backup/` |
+| `tinycloud-gw backup` | saves the gateway identity to `/root/tinycloud-backup/` (a timer also does this every Sunday, and alerts you if it fails) |
 | `tinycloud-gw restore FILE` | puts a saved identity back |
 
 Every approve, remove, link, backup, and restore is logged in `/opt/tinycloud-gateway/audit.log`.

@@ -221,6 +221,7 @@ A node shows a warning when it is offline, low on space, has name conflicts, has
 - Sync stops for everyone. Nodes keep their files.
 - Fix: build a new Linode, run `setup.sh`, restore the identity backup, and keep the same IP and hostname.
 - `tinycloud-gw backup` saves the gateway identity (keys, IDs, relay token, approved list).
+- A timer runs the backup every Sunday at about 3:30 AM and keeps the last 10. If a weekly backup fails, an alert goes out. Copying backups off the server stays manual, since they hold secrets.
 
 ## Later: linked clouds
 

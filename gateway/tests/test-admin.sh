@@ -195,6 +195,23 @@ assert_contains "backup has approved list" "$listing" "state/approved.json"
 assert_contains "backup has node lines" "$listing" "node-lines.txt"
 assert_not_contains "backup skips db" "$listing" "index-v0.14.0.db"
 assert_not_contains "backup skips synced files" "$listing" "tinycloud-peers/peers.json"
+
+alert_send() { printf '%s\n' "$1" >> "$FAKE/alerts.out"; }
+out=$(cmd_backup --auto 2>&1)
+assert_contains "auto backup saved" "$out" "Saved:"
+assert_not_contains "auto backup has no copy hint" "$out" "scp root@"
+assert_eq "auto backup success sends no alert" 0 "$([ -e "$FAKE/alerts.out" ] && echo 1 || echo 0)"
+saved_dir=$GW_BACKUP_DIR
+GW_BACKUP_DIR=/proc/nope
+BACKUP_DIR=$GW_BACKUP_DIR
+out=$(cmd_backup --auto 2>&1)
+assert_eq "auto backup failure is reported" 1 "$(cmd_backup --auto > /dev/null 2>&1 && echo 0 || echo 1)"
+assert_contains "auto backup failure sends an alert" "$(cat "$FAKE/alerts.out")" "weekly gateway backup failed"
+rm -f "$FAKE/alerts.out"
+cmd_backup > /dev/null 2>&1
+assert_eq "manual backup failure sends no alert" 0 "$([ -e "$FAKE/alerts.out" ] && echo 1 || echo 0)"
+GW_BACKUP_DIR=$saved_dir
+BACKUP_DIR=$saved_dir
 assert_contains "audit backup" "$(cat "$AUDIT")" "backup "
 assert_not_contains "audit has no token" "$(cat "$AUDIT")" "secrettoken"
 
