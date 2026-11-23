@@ -13,6 +13,12 @@ TZ_NAME=
 FIREWALL=
 SSH_HARDEN=
 CHANNEL=
+SMB=
+SMB_MODE=
+SMB_USER=
+SMB_GUEST=
+SMB_OWNER=
+SMB_PASSWORD=
 UPDATE_ONLY=false
 PREV_TAR=${TC_PREV_TAR:-/var/tmp/tinycloud-node-prev.tar}
 AUTO_UPDATE=
@@ -91,13 +97,13 @@ ask_yes() {
 }
 
 usage() {
-  say "usage: sh setup-node.sh [--name NAME] [--owner OWNER] [--role ROLE] [--timezone TZ] [--channel stable|testing|off] [--firewall yes|no] [--ssh-hardening yes|no] [--auto-update yes|no] [--auto-reboot yes|no] [--reboot-time TIME] [--config FILE] [--yes] [--dry-run]"
+  say "usage: sh setup-node.sh [--name NAME] [--owner OWNER] [--role ROLE] [--timezone TZ] [--channel stable|testing|off] [--firewall yes|no] [--ssh-hardening yes|no] [--smb yes|no] [--smb-mode ro|rw] [--smb-user NAME] [--smb-guest yes|no] [--auto-update yes|no] [--auto-reboot yes|no] [--reboot-time TIME] [--config FILE] [--yes] [--dry-run]"
 }
 
 parse_args() {
   while [ $# -gt 0 ]; do
     case $1 in
-      --name | --owner | --role | --timezone | --config | --auto-update | --auto-reboot | --reboot-time | --firewall | --ssh-hardening | --channel)
+      --name | --owner | --role | --timezone | --config | --auto-update | --auto-reboot | --reboot-time | --firewall | --ssh-hardening | --channel | --smb | --smb-mode | --smb-user | --smb-guest)
         [ $# -ge 2 ] || { usage; return 1; }
         case $1 in
           --name) NODE_NAME=$2 ;;
@@ -111,6 +117,10 @@ parse_args() {
           --firewall) FIREWALL=$2 ;;
           --channel) CHANNEL=$2 ;;
           --ssh-hardening) SSH_HARDEN=$2 ;;
+          --smb) SMB=$2 ;;
+          --smb-mode) SMB_MODE=$2 ;;
+          --smb-user) SMB_USER=$2 ;;
+          --smb-guest) SMB_GUEST=$2 ;;
         esac
         shift 2
         ;;
@@ -228,6 +238,7 @@ load_lib() {
   GW_DIR=$SRC/gateway
   . "$GW_DIR/lib.sh"
   . "$SRC/node/harden/harden.sh"
+  . "$SRC/node/harden/smb.sh"
 }
 
 valid_tz_name() {
@@ -628,6 +639,11 @@ show_plan() {
   if [ -n "$FIREWALL$SSH_HARDEN$CHANNEL" ]; then
     say "Security: $(harden_summary)"
   fi
+  if [ "$SMB" = yes ]; then
+    say "SMB:      $(smb_summary)"
+  elif [ "$SMB" = no ] && smb_present; then
+    say "SMB:      off, the existing share is removed"
+  fi
   say "System:   $os_id $os_version"
   say ""
 }
@@ -827,6 +843,9 @@ finish_up() {
     say "To use tinycloud without sudo, log out and back in once."
   fi
   say "Copy files to this node from another machine with: scp file.epub $TARGET_USER@$(hostname):tinycloud/"
+  if [ "$SMB" = yes ]; then
+    say "From a PC on your network: \\\\$(hostname)\\tinycloud (Windows) or smb://$(hostname)/tinycloud (Mac)"
+  fi
 }
 
 main() {
@@ -855,6 +874,9 @@ main() {
     choose_updates || return 1
     choose_hardening || return 1
   fi
+  if [ "$KEEP_CONFIG" != true ] || [ -n "$SMB" ]; then
+    choose_smb || return 1
+  fi
   show_plan
   if ! ask_yes "Continue?" y; then
     say "cancelled"
@@ -867,6 +889,7 @@ main() {
   setup_host_status || return 1
   setup_firewall || return 1
   setup_ssh_hardening || return 1
+  setup_smb || return 1
   setup_autoupdate || return 1
   link_command || return 1
   setup_user

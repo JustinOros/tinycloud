@@ -39,7 +39,7 @@ chmod +x "$SANDBOX/fakebin/dpkg"
 {
   printf 'adrian\njustin\ncontributor\nAmerica/Phoenix\n'
   cat "$SANDBOX/lines"
-  printf '\ny\ny\n3:00 AM\ny\ny\n1\ny\n'
+  printf '\ny\ny\n3:00 AM\ny\ny\n1\nn\ny\n'
 } > "$SANDBOX/in1"
 out=$(run_setup debian13 "$SANDBOX/in1" --dry-run)
 assert_contains "banner" "$out" "TinyCloud node setup"
@@ -112,7 +112,7 @@ assert_contains "debian 11 refused" "$out" "unsupported system"
   printf 'bad name\nadrian\njustin\nbogus\nreader\nUTC\n'
   printf 'GATEWAY_HOST=gw.example.com\n\n'
   cat "$SANDBOX/lines"
-  printf '\nn\ny\ny\n3\ny\n'
+  printf '\nn\ny\ny\n3\nn\ny\n'
 } > "$SANDBOX/in2"
 out=$(run_setup debian13 "$SANDBOX/in2" --dry-run)
 assert_contains "retries a bad name" "$out" "That is not valid."
@@ -123,17 +123,90 @@ assert_contains "security plan" "$out" "Security: firewall on, SSH hardened, no 
 assert_contains "firewall planned" "$out" "+ systemctl enable --now tinycloud-firewall"
 assert_contains "off channel removes the timer" "$out" "+ remove the TinyCloud self-update timer"
 
-printf 'adrian\njustin\n2\nUTC\n%s\n\nn\nn\nn\n3\ny\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in4"
+TC_SMB_PASSWORD=secret123
+export TC_SMB_PASSWORD
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role contributor --config "$SANDBOX/lines" --smb yes --smb-mode rw --smb-user rachel)
+assert_contains "smb plan" "$out" "SMB:      read-write, your own folder, user rachel"
+assert_contains "smb install planned" "$out" "+ install samba"
+assert_contains "smb share planned" "$out" "/tinycloud.conf (rw, $NODE_HOME/data/library/justin)"
+assert_contains "smb user planned" "$out" "+ add the SMB user rachel"
+assert_not_contains "smb password never printed" "$out" "secret123"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role contributor --config "$SANDBOX/lines" --smb yes --smb-mode ro)
+assert_contains "smb read-only plan" "$out" "SMB:      read-only, the whole library, user justin"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role reader --config "$SANDBOX/lines" --smb yes)
+assert_contains "reader defaults to read-only" "$out" "SMB:      read-only, the whole library"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role reader --config "$SANDBOX/lines" --smb yes --smb-mode rw)
+assert_contains "reader cannot share read-write" "$out" "its share must be read-only"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role contributor --config "$SANDBOX/lines" --smb yes --smb-mode ro --smb-guest yes)
+assert_contains "guest plan" "$out" "SMB:      read-only, the whole library, no password"
+assert_not_contains "guest adds no user" "$out" "+ add the SMB user"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role contributor --config "$SANDBOX/lines" --smb yes --smb-mode rw --smb-guest yes)
+assert_contains "guest read-write refused" "$out" "read-write needs a password"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role contributor --config "$SANDBOX/lines" --smb maybe)
+assert_contains "bad smb flag refused" "$out" "--smb must be yes or no"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role contributor --config "$SANDBOX/lines" --smb yes --smb-mode both)
+assert_contains "bad smb mode refused" "$out" "--smb-mode must be ro or rw"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role contributor --config "$SANDBOX/lines" --smb yes --smb-user Root)
+assert_contains "bad smb user refused" "$out" "bad SMB username"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role contributor --config "$SANDBOX/lines" --smb yes --smb-guest maybe)
+assert_contains "bad smb guest flag refused" "$out" "--smb-guest must be yes or no"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role contributor --config "$SANDBOX/lines")
+assert_not_contains "smb off by default" "$out" "SMB:"
+unset TC_SMB_PASSWORD
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role contributor --config "$SANDBOX/lines" --smb yes)
+assert_contains "yes mode needs a password variable" "$out" "set TC_SMB_PASSWORD"
+TC_SMB_PASSWORD=short
+export TC_SMB_PASSWORD
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role contributor --config "$SANDBOX/lines" --smb yes)
+assert_contains "short password refused" "$out" "at least 8 characters"
+unset TC_SMB_PASSWORD
+
+{
+  printf 'adrian\njustin\ncontributor\nUTC\n'
+  cat "$SANDBOX/lines"
+  printf '\nn\nn\nn\n3\n'
+  printf 'y\n1\n\nshort\nshort\nsecretpass1\nother\nsecretpass1\nsecretpass1\ny\n'
+} > "$SANDBOX/in6"
+out=$(run_setup debian13 "$SANDBOX/in6" --dry-run)
+assert_contains "smb asked about" "$out" "Share your files on your local network over SMB"
+assert_contains "smb access menu" "$out" "1) read-write  add files to your own folder"
+assert_contains "smb read-write needs a password" "$out" "Read-write always needs a password."
+assert_contains "smb user defaults to the owner" "$out" "SMB username [justin]:"
+assert_contains "short password retried" "$out" "Use at least 8 characters."
+assert_contains "mismatch retried" "$out" "They do not match."
+assert_contains "interactive smb plan" "$out" "SMB:      read-write, your own folder, user justin"
+assert_not_contains "typed password never printed" "$out" "secretpass1"
+
+{
+  printf 'adrian\njustin\ncontributor\nUTC\n'
+  cat "$SANDBOX/lines"
+  printf '\nn\nn\nn\n3\n'
+  printf 'y\n2\nn\nn\ny\n'
+} > "$SANDBOX/in7"
+out=$(run_setup debian13 "$SANDBOX/in7" --dry-run)
+assert_contains "no password warned" "$out" "anyone on your network can read these files"
+assert_contains "no password declined stays safe" "$out" "SMB username"
+
+{
+  printf 'adrian\njustin\ncontributor\nUTC\n'
+  cat "$SANDBOX/lines"
+  printf '\nn\nn\nn\n3\n'
+  printf 'y\n2\nn\ny\ny\n'
+} > "$SANDBOX/in8"
+out=$(run_setup debian13 "$SANDBOX/in8" --dry-run)
+assert_contains "interactive guest plan" "$out" "SMB:      read-only, the whole library, no password"
+
+printf 'adrian\njustin\n2\nUTC\n%s\n\nn\nn\nn\n3\nn\ny\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in4"
 out=$(run_setup debian13 "$SANDBOX/in4" --dry-run)
 assert_contains "role menu lists choices" "$out" "2) contributor  sends and receives"
 assert_contains "role number picks the role" "$out" "role contributor"
 
-printf 'adrian\njustin\n9\n\nUTC\n%s\n\nn\nn\nn\n3\ny\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in5"
+printf 'adrian\njustin\n9\n\nUTC\n%s\n\nn\nn\nn\n3\nn\ny\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in5"
 out=$(run_setup debian13 "$SANDBOX/in5" --dry-run)
 assert_contains "bad role number retried" "$out" "That is not valid."
 assert_contains "blank role defaults to reader" "$out" "role reader"
 
-printf 'adrian\njustin\nreader\nUTC\n%s\n\nn\nn\nn\n3\nn\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in3"
+printf 'adrian\njustin\nreader\nUTC\n%s\n\nn\nn\nn\n3\nn\nn\n' "$(cat "$SANDBOX/lines")" > "$SANDBOX/in3"
 out=$(run_setup debian13 "$SANDBOX/in3" --dry-run)
 assert_contains "declined" "$out" "cancelled"
 assert_not_contains "declined runs nothing" "$out" "dry run finished"
@@ -295,5 +368,89 @@ assert_eq "root source refused" 1 "$(fetch_tree > /dev/null 2>&1 && echo 0 || ec
 SETUP_SRC=$SANDBOX/src
 TC_REF='main;rm'
 assert_eq "bad ref refused" 1 "$(fetch_tree > /dev/null 2>&1 && echo 0 || echo 1)"
+
+SMB_CONF_DIR=$SANDBOX/samba
+SMB_LOG=$SANDBOX/smbcalls
+: > "$SMB_LOG"
+dpkg() { return 0; }
+getent() {
+  case $2 in
+    1000) echo 'tester:x:1000:1000::/home/tester:/bin/sh' ;;
+    rachel) [ -f "$SANDBOX/rachel-exists" ] && echo 'rachel:x:1001:1001::/nonexistent:/usr/sbin/nologin' || return 2 ;;
+    *) return 2 ;;
+  esac
+}
+id() { echo tester; }
+useradd() { echo "useradd $*" >> "$SMB_LOG"; touch "$SANDBOX/rachel-exists"; }
+systemctl() { echo "systemctl $*" >> "$SMB_LOG"; }
+testparm() { echo "testparm $*" >> "$SMB_LOG"; [ -z "${FAKE_TESTPARM_FAIL:-}" ]; }
+smbpasswd() {
+  case $1 in
+    -x) echo "smbpasswd $*" >> "$SMB_LOG" ;;
+    *) echo "smbpasswd $* stdin=$(cat | wc -c | tr -d ' ')" >> "$SMB_LOG" ;;
+  esac
+}
+DRY_RUN=false
+ASSUME_YES=true
+NODE_HOME=$SANDBOX/node
+SMB=yes
+SMB_MODE=rw
+SMB_GUEST=no
+SMB_USER=rachel
+SMB_OWNER=justin
+SMB_PASSWORD=secret123
+smb_enable
+smb_enable
+conf=$(cat "$SMB_CONF_DIR/tinycloud.conf")
+assert_contains "share path is the owner folder" "$conf" "path = $NODE_HOME/data/library/justin"
+assert_contains "share is read-write" "$conf" "read only = no"
+assert_contains "share needs the user" "$conf" "valid users = rachel"
+assert_contains "files are written as the library owner" "$conf" "force user = tester"
+assert_contains "smb1 off" "$conf" "server min protocol = SMB2"
+assert_contains "share limited to the lan" "$conf" "hosts allow = 127.0.0.1 ::1 10.0.0.0/8"
+assert_not_contains "no guest access with a password" "$conf" "guest only"
+assert_eq "share folder made" 1 "$([ -d "$NODE_HOME/data/library/justin" ] && echo 1 || echo 0)"
+assert_eq "include added once" 1 "$(grep -c "^include = $SMB_CONF_DIR/tinycloud.conf$" "$SMB_CONF_DIR/smb.conf")"
+calls=$(cat "$SMB_LOG")
+assert_contains "system user created locked" "$calls" "useradd --system --no-create-home --shell /usr/sbin/nologin rachel"
+assert_contains "password set through stdin" "$calls" "smbpasswd -a -s rachel stdin=20"
+assert_not_contains "password never on a command line" "$calls" "secret123"
+assert_contains "settings checked" "$calls" "testparm -s $SMB_CONF_DIR/smb.conf"
+assert_contains "samba restarted" "$calls" "systemctl restart smbd"
+assert_eq "existing account not created again" 1 "$(grep -c '^useradd' "$SMB_LOG")"
+assert_eq "conf is not secret" 644 "$(stat -c %a "$SMB_CONF_DIR/tinycloud.conf" 2> /dev/null || stat -f %Lp "$SMB_CONF_DIR/tinycloud.conf")"
+
+SMB_MODE=ro
+SMB_GUEST=yes
+SMB_USER=
+smb_enable
+conf=$(cat "$SMB_CONF_DIR/tinycloud.conf")
+assert_contains "read-only share is the whole library" "$conf" "path = $NODE_HOME/data/library"
+assert_contains "read-only share" "$conf" "read only = yes"
+assert_contains "guest share" "$conf" "guest only = yes"
+assert_not_contains "guest share has no user list" "$conf" "valid users"
+
+SMB_MODE=rw
+SMB_GUEST=no
+SMB_USER=rachel
+smb_enable
+smb_disable
+assert_eq "disable removes the share" 0 "$([ -e "$SMB_CONF_DIR/tinycloud.conf" ] && echo 1 || echo 0)"
+assert_eq "disable removes the include" 0 "$(grep -c 'tinycloud.conf' "$SMB_CONF_DIR/smb.conf")"
+assert_contains "disable removes the smb account" "$(cat "$SMB_LOG")" "smbpasswd -x rachel"
+: > "$SMB_LOG"
+smb_disable
+assert_eq "disable with nothing set up does nothing" 0 "$(wc -c < "$SMB_LOG" | tr -d ' ')"
+
+FAKE_TESTPARM_FAIL=1
+assert_eq "bad settings refuse to enable" 1 "$(smb_enable > /dev/null 2>&1 && echo 0 || echo 1)"
+assert_eq "bad settings leave no share" 0 "$([ -e "$SMB_CONF_DIR/tinycloud.conf" ] && echo 1 || echo 0)"
+assert_eq "bad settings leave no include" 0 "$(grep -c 'tinycloud.conf' "$SMB_CONF_DIR/smb.conf")"
+unset FAKE_TESTPARM_FAIL
+
+getent() { return 2; }
+assert_eq "missing uid 1000 refused" 1 "$(smb_enable > /dev/null 2>&1 && echo 0 || echo 1)"
+SMB=
+unset -f dpkg getent id useradd systemctl testparm smbpasswd
 
 finish

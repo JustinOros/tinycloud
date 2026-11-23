@@ -39,6 +39,10 @@ assert_contains "fw allows the ssh port from the lan" "$fw" "ip saddr @lan4 tcp 
 assert_contains "fw allows established" "$fw" "ct state established,related accept"
 assert_contains "fw guards published ports" "$fw" "ct status dnat ip saddr != @lan4 drop"
 assert_contains "fw lan covers private ranges" "$fw" "192.168.0.0/16"
+assert_not_contains "fw keeps smb closed by default" "$fw" "445"
+fw_smb=$(render_node_firewall 22 yes)
+assert_contains "fw opens smb for the lan only" "$fw_smb" "ip saddr @lan4 tcp dport { 139, 445 } accept"
+assert_contains "fw opens netbios names for the lan only" "$fw_smb" "ip saddr @lan4 udp dport { 137, 138 } accept"
 assert_contains "unit loads the rules" "$(render_firewall_unit)" "ExecStart=/usr/sbin/nft -f $HARDEN_FW_FILE"
 assert_contains "unit starts before the network" "$(render_firewall_unit)" "Before=network-pre.target"
 

@@ -57,6 +57,7 @@ A node holds its own owner's folder by its role, and every other owner's folder 
 - Armbian kernel and firmware are never auto-updated, because a bad kernel can stop a board from booting.
 - If a reboot has been pending for 36 hours, the node reports it and the dashboard shows "Reboot needed".
 - SSH allows keys only once an `authorized_keys` file exists, limits login attempts, and fail2ban bans repeat offenders.
+- Setup can share the library over SMB so a PC on the local network can copy files in and out (default off). Read-write shares only the owner's own folder, so everything added syncs. Read-only shares the whole library. A password is required, except for read-only, where the owner may choose none. Setup creates a locked system account for the SMB login, adds one `include` line to `smb.conf` instead of replacing it, allows only private LAN addresses, turns SMB1 off, and opens ports 139 and 445 on the host firewall for the LAN only. Reader nodes are read-only.
 - A nightly timer updates TinyCloud itself from the `stable` branch (default), from `main` (testing), or not at all.
 - An update that leaves Syncthing, the agent or the web page unhealthy is rolled back from a saved copy.
 - Publish a release with `git push origin main:stable`.

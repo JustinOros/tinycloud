@@ -15,6 +15,7 @@ ssh_port() {
 
 render_node_firewall() {
   rnf_port=$1
+  rnf_smb=${2:-no}
   printf 'add table inet tinycloud_fw\n'
   printf 'delete table inet tinycloud_fw\n'
   printf 'table inet tinycloud_fw {\n'
@@ -34,6 +35,12 @@ render_node_firewall() {
   printf '    ip6 saddr @lan6 tcp dport %s accept\n' "$rnf_port"
   printf '    ip saddr @lan4 udp dport 5353 accept\n'
   printf '    ip6 saddr @lan6 udp dport 5353 accept\n'
+  if [ "$rnf_smb" = yes ]; then
+    printf '    ip saddr @lan4 tcp dport { 139, 445 } accept\n'
+    printf '    ip6 saddr @lan6 tcp dport { 139, 445 } accept\n'
+    printf '    ip saddr @lan4 udp dport { 137, 138 } accept\n'
+    printf '    ip6 saddr @lan6 udp dport { 137, 138 } accept\n'
+  fi
   printf '  }\n'
   printf '  chain forward {\n    type filter hook forward priority -10; policy accept;\n'
   printf '    ct status dnat ip saddr != @lan4 drop\n'
@@ -85,7 +92,11 @@ setup_firewall() {
     return 0
   fi
   mkdir -p "$(dirname "$HARDEN_FW_FILE")" "$HARDEN_UNIT_DIR" || return 1
-  render_node_firewall "$sf_port" > "$HARDEN_FW_FILE" || return 1
+  sf_smb=no
+  if [ "${SMB:-}" = yes ] || { [ -z "${SMB:-}" ] && [ -f "${SMB_CONF_DIR:-/etc/samba}/tinycloud.conf" ]; }; then
+    sf_smb=yes
+  fi
+  render_node_firewall "$sf_port" "$sf_smb" > "$HARDEN_FW_FILE" || return 1
   chmod 644 "$HARDEN_FW_FILE"
   if ! nft -c -f "$HARDEN_FW_FILE"; then
     rm -f "$HARDEN_FW_FILE"
