@@ -252,8 +252,10 @@ existing_token() {
 
 install_stack() {
   is_token=$(existing_token)
+  token_new=
   if ! valid_token "$is_token"; then
     is_token=$(gen_token)
+    token_new=yes
   fi
   run mkdir -p "$GW_HOME/data/syncthing" "$GW_HOME/data/relay" "$GW_HOME/data/disco"
   run chown -R 1000:1000 "$GW_HOME/data"
@@ -305,7 +307,12 @@ print_summary() {
   token=$(existing_token)
   ps_lines=$(printf 'GATEWAY_HOST=%s\nGATEWAY_ID=%s\nRELAY_ID=%s\nDISCOVERY_ID=%s\nRELAY_TOKEN=%s' "$HOST" "$gateway_id" "$relay_id" "$disc_id" "$token")
   printf '%s\n' "$ps_lines" | put_file "$GW_HOME/node-lines.txt" 600
-  printf '\nCopy these into each node tinycloud.conf:\n\n%s\n\n' "$ps_lines"
+  if [ "${token_new:-}" = yes ]; then
+    ps_shown=$ps_lines
+  else
+    ps_shown=$(printf '%s\n' "$ps_lines" | sed 's/^RELAY_TOKEN=.*/RELAY_TOKEN=(hidden, show it with: tinycloud-gw config)/')
+  fi
+  printf '\nCopy these into each node tinycloud.conf:\n\n%s\n\n' "$ps_shown"
   printf 'They are saved in %s/node-lines.txt. Show them again with: tinycloud-gw config\n' "$GW_HOME"
   printf 'The relay token is secret.\n'
 }

@@ -116,12 +116,18 @@ HOST=gw.example.com
 gateway_id=$(mkid A)
 relay_id=$(mkid B)
 disc_id=$(mkid C)
+token_new=yes
 summary=$(print_summary)
-assert_contains "summary shows relay token" "$summary" "RELAY_TOKEN=tok999"
+assert_contains "summary shows a new relay token" "$summary" "RELAY_TOKEN=tok999"
+token_new=
+summary=$(print_summary)
+assert_not_contains "summary hides an existing relay token" "$summary" "tok999"
+assert_contains "summary points to config for the token" "$summary" "RELAY_TOKEN=(hidden"
 assert_contains "summary mentions config command" "$summary" "tinycloud-gw config"
 saved=$(cat "$GW_HOME/node-lines.txt")
 assert_contains "lines saved host" "$saved" "GATEWAY_HOST=gw.example.com"
 assert_contains "lines saved discovery" "$saved" "DISCOVERY_ID=$(mkid C)"
+assert_contains "lines saved token" "$saved" "RELAY_TOKEN=tok999"
 assert_eq "lines file private" 600 "$(stat -c %a "$GW_HOME/node-lines.txt" 2> /dev/null || stat -f %Lp "$GW_HOME/node-lines.txt")"
 
 assert_contains "aggregate service runs the command" "$(render_aggregate_service)" "ExecStart=/usr/local/bin/tinycloud-gw aggregate"
