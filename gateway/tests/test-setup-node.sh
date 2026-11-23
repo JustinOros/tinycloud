@@ -414,6 +414,8 @@ conf=$(cat "$SMB_CONF_DIR/tinycloud.conf")
 assert_contains "share path is the owner folder" "$conf" "path = $NODE_HOME/data/library/justin"
 assert_contains "share is read-write" "$conf" "read only = no"
 assert_contains "share needs the user" "$conf" "valid users = rachel"
+assert_contains "home shares are off" "$conf" "[homes]
+  available = no"
 assert_contains "files are written as the library owner" "$conf" "force user = tester"
 assert_contains "smb1 off" "$conf" "server min protocol = SMB2"
 assert_contains "share limited to the lan" "$conf" "hosts allow = 127.0.0.1 ::1 10.0.0.0/8"

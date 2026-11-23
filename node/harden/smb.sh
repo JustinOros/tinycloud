@@ -193,6 +193,11 @@ render_smb_share() {
   if [ "$3" = yes ]; then
     printf '  map to guest = Bad User\n'
   fi
+  printf '  load printers = no\n'
+  printf '  disable spoolss = yes\n'
+  printf '\n[homes]\n  available = no\n  browseable = no\n'
+  printf '\n[printers]\n  available = no\n  browseable = no\n'
+  printf '\n[print$]\n  available = no\n  browseable = no\n'
   printf '\n[tinycloud]\n'
   printf '  comment = TinyCloud\n'
   printf '  path = %s\n' "$1"
