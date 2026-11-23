@@ -82,8 +82,18 @@ assert_not_contains "network checks skipped" "$OUT" "resolves"
 setup
 printf '{"state":"error","globalBytes":1,"localBytes":1,"pullErrors":3}' > "$FAKE_DIR/dbstatus.json"
 run_doctor
-assert_contains "sync errors warned" "$OUT" "Library has sync errors (3 files)"
+assert_contains "sync errors warned" "$OUT" "Folder justin has sync errors (3 files)"
 assert_eq "warnings alone do not fail" 0 "$RC"
+
+setup
+printf '[{"id":"tc-lib-justin"},{"id":"tc-lib-finn"}]' > "$FAKE_DIR/folders.json"
+run_doctor
+assert_contains "each folder reported" "$OUT" "Folder finn state: idle"
+
+setup
+printf '[]' > "$FAKE_DIR/folders.json"
+run_doctor
+assert_contains "no folders warned" "$OUT" "No library folders found"
 
 setup
 printf 'x' > "$TC_STATE_DIR/rejected.sha"

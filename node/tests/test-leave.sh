@@ -26,16 +26,22 @@ setup() {
 setup
 main > "$FAKE_DIR/out" 2>&1
 assert_eq "leave ok" 0 "$?"
-assert_jq "library shared with self only" "$(body_of 'PATCH /rest/config/folders/tinycloud-library')" "(.devices | length) == 1 and .devices[0].deviceID == \"$ME\""
+assert_jq "library shared with self only" "$(body_of 'PATCH /rest/config/folders/tc-lib-justin')" "(.devices | length) == 1 and .devices[0].deviceID == \"$ME\""
 assert_eq "peer 1 removed" 1 "$(count_calls "DELETE /rest/config/devices/$P1")"
 assert_eq "peer 2 removed" 1 "$(count_calls "DELETE /rest/config/devices/$P2")"
 assert_eq "gateway removed" 1 "$(count_calls "DELETE /rest/config/devices/$GW")"
 assert_eq "peers folder removed" 1 "$(count_calls 'DELETE /rest/config/folders/tinycloud-peers')"
 assert_eq "status folder removed" 1 "$(count_calls 'DELETE /rest/config/folders/tc-status-rocky')"
 assert_eq "view folder removed" 1 "$(count_calls 'DELETE /rest/config/folders/tc-view-justin')"
-assert_eq "library folder not deleted" 0 "$(count_calls 'DELETE /rest/config/folders/tinycloud-library')"
+assert_eq "library folder not deleted" 0 "$(count_calls 'DELETE /rest/config/folders/tc-lib-justin')"
 assert_eq "left marker written" 1 "$(test -f "$TC_STATE_DIR/left" && echo 1 || echo 0)"
 assert_eq "managed list cleared" 0 "$(test -f "$TC_STATE_DIR/managed.ids" && echo 1 || echo 0)"
+
+setup
+printf '[{"id":"tc-lib-justin"},{"id":"tc-lib-finn"},{"id":"tinycloud-peers"}]' > "$FAKE_DIR/folders.json"
+main > "$FAKE_DIR/out" 2>&1
+assert_jq "every owner folder unshared" "$(body_of 'PATCH /rest/config/folders/tc-lib-finn')" "(.devices | length) == 1 and .devices[0].deviceID == \"$ME\""
+assert_eq "no owner folder deleted" 0 "$(count_calls 'DELETE /rest/config/folders/tc-lib-')"
 
 setup
 FAKE_FAIL="DELETE /rest/config/devices"

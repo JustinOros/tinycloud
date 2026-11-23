@@ -33,12 +33,12 @@ The gateway never stores the library. Anchor nodes hold full copies.
 
 | Folder | Direction | Holds |
 |---|---|---|
-| `tinycloud-library` | between nodes | your shared files |
+| `tc-lib-OWNER` | between nodes | that owner's files, at `library/OWNER` on every node |
 | `tinycloud-peers` | gateway to nodes | `peers.json` |
 | `tc-status-NAME` | node to gateway | that node's status |
 | `tc-view-OWNER` | gateway to that owner's nodes | what that owner may see |
 
-Nobody ever auto-accepts a folder or a device. The introducer feature is never used.
+A node holds its own owner's folder by its role, and every other owner's folder as Receive Only. Nobody ever auto-accepts a folder or a device. The introducer feature is never used.
 
 ## Network
 
@@ -83,7 +83,7 @@ An agent applies it only if every entry is valid:
 
 Anything else rejects the whole file. Unknown fields are ignored.
 
-The agent changes two things only: which devices exist, and which devices get the library. Readers skip other readers.
+The agent changes two things only: which devices exist, and which devices get the owner folders. It also creates a folder for each owner it sees, and removes the folder setting, never the files, for an owner who has left. Readers skip other readers.
 
 Optional: `PEERS_CONFIRM=manual` makes the node's owner confirm each new peer first.
 
@@ -152,7 +152,7 @@ Pi images keep it on the FAT partition named TINYCLOUD and delete it after first
 
 ## Adding files
 
-Every node has a shortcut named `tinycloud` in its owner's home folder, pointing at the library. From another machine: `scp book.epub NODE:tinycloud/`. `tinycloud path` prints the real location.
+Every node has a shortcut named `tinycloud` in its owner's home folder, pointing at the library. Your files go in your own owner folder. From another machine: `scp book.epub NODE:tinycloud/OWNER/`. `tinycloud path` prints the real location.
 
 ## Local status page
 
@@ -248,7 +248,7 @@ Not built yet. The single gateway comes first.
 
 ### Build order
 
-1. Per-owner folders, and moving existing nodes from `tinycloud-library` to them.
+1. Per-owner folders. Built. The first agent run on an existing node removes the old `tinycloud-library` folder setting and creates the owner folders, and the files stay where they are.
 2. Nodes accept extra discovery and relay servers.
 3. The link commands.
 

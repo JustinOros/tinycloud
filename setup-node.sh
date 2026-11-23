@@ -659,6 +659,10 @@ install_files() {
   tar -C "$SRC/node" --exclude=./data --exclude=./tinycloud.conf --exclude=./tests -cf - . | tar -C "$NODE_HOME" -xf - || return 1
   mkdir -p "$NODE_HOME/data/library" "$NODE_HOME/host"
   chown 1000:1000 "$NODE_HOME/data/library" 2> /dev/null || true
+  if [ -n "${OWNER:-}" ]; then
+    mkdir -p "$NODE_HOME/data/library/$OWNER"
+    chown 1000:1000 "$NODE_HOME/data/library/$OWNER" 2> /dev/null || true
+  fi
   chmod +x "$NODE_HOME/bin/tinycloud"
   if cp "$SRC/setup-node.sh" "$NODE_HOME/setup-node.sh.new" 2> /dev/null; then
     chmod 755 "$NODE_HOME/setup-node.sh.new"

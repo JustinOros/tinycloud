@@ -1,7 +1,6 @@
 #!/bin/sh
 . "${TC_ROOT:-/app}/agent/lib.sh"
 
-LIB_FOLDER=tinycloud-library
 PEERS_FILE=${TC_PEERS_FILE:-$TC_SYSTEM_DIR/peers/peers.json}
 
 PEERS_CHECK='
@@ -40,16 +39,56 @@ ids_json() {
   fi
 }
 
+sync_owner_folder() {
+  sof_id=tc-lib-$1
+  if sof_cur=$(st_api GET "/rest/config/folders/$sof_id" 2> /dev/null); then
+    sof_body=$(printf '%s' "$sof_cur" | jq -c --argjson rm "$3" --argjson want "$4" '
+      .devices as $cur
+      | ($cur | map(select(.deviceID as $d | ($rm | index($d)) == null))) as $kept
+      | ($kept | map(.deviceID)) as $have
+      | {devices: ($kept + ($want | map(select(. as $d | ($have | index($d)) == null) | {deviceID: .})))}')
+    st_api PATCH "/rest/config/folders/$sof_id" "$sof_body" > /dev/null || {
+      log ERROR "could not update folder $1"
+      return 1
+    }
+  else
+    sof_devices=$(jq -nc --arg me "$2" --argjson want "$4" '[{deviceID: $me}] + ($want | map({deviceID: .}))')
+    put_owner_folder "$1" "$sof_devices" || {
+      log ERROR "could not create folder $1"
+      return 1
+    }
+    log INFO "folder $1 created"
+  fi
+}
+
+drop_old_folders() {
+  dof_have=$(lib_folder_ids) || dof_have=
+  for dof_id in $dof_have; do
+    if [ "$(printf '%s' "$1" | jq --arg o "${dof_id#tc-lib-}" 'index($o) == null')" = true ]; then
+      if st_api DELETE "/rest/config/folders/$dof_id" > /dev/null; then
+        log INFO "folder ${dof_id#tc-lib-} removed, files kept"
+      else
+        log WARN "could not remove folder ${dof_id#tc-lib-}"
+      fi
+    fi
+  done
+  if st_api GET /rest/config/folders/tinycloud-library > /dev/null 2>&1; then
+    if st_api DELETE /rest/config/folders/tinycloud-library > /dev/null; then
+      log WARN "old tinycloud-library folder removed, files kept"
+    else
+      log WARN "could not remove the old tinycloud-library folder"
+    fi
+  fi
+}
+
 apply_peers() {
   ap_status=$(st_api GET /rest/system/status) || return 1
   ap_me=$(printf '%s' "$ap_status" | jq -r '.myID // empty')
   ap_gw=$(conf_get GATEWAY_ID)
   ap_role=$(conf_get ROLE reader)
   ap_confirm=$(conf_get PEERS_CONFIRM auto)
-  ap_folder=$(st_api GET "/rest/config/folders/$LIB_FOLDER") || {
-    log ERROR "library folder not found, first boot not done"
-    return 1
-  }
+  ap_owner=$(conf_get OWNER)
+  valid_name "$ap_owner" || { log ERROR "OWNER is invalid"; return 1; }
   ap_desired=$(printf '%s' "$1" | jq -c --arg me "$ap_me" --arg gw "$ap_gw" --arg role "$ap_role" \
     'map(select(.id != $me and .id != $gw and ($role != "reader" or .role != "reader")))')
   ap_managed=$(ids_json "$(state_file managed.ids)")
@@ -80,15 +119,11 @@ apply_peers() {
     return 1
   fi
 
-  ap_devices=$(printf '%s' "$ap_folder" | jq -c --argjson rm "$ap_remove" --argjson want "$ap_want" '
-    .devices as $cur
-    | ($cur | map(select(.deviceID as $d | ($rm | index($d)) == null))) as $kept
-    | ($kept | map(.deviceID)) as $have
-    | {devices: ($kept + ($want | map(select(. as $d | ($have | index($d)) == null) | {deviceID: .})))}')
-  st_api PATCH "/rest/config/folders/$LIB_FOLDER" "$ap_devices" > /dev/null || {
-    log ERROR "could not update library devices"
-    return 1
-  }
+  ap_owners=$(printf '%s' "$ap_desired" | jq -c --arg o "$ap_owner" '[.[].owner, $o] | unique')
+  for ap_o in $(printf '%s' "$ap_owners" | jq -r '.[]'); do
+    sync_owner_folder "$ap_o" "$ap_me" "$ap_remove" "$ap_want" || return 1
+  done
+  drop_old_folders "$ap_owners"
 
   for ap_old in $(printf '%s' "$ap_remove" | jq -r '.[]'); do
     st_api DELETE "/rest/config/devices/$ap_old" > /dev/null || log WARN "could not remove device $ap_old"
@@ -107,7 +142,7 @@ main() {
   fi
   mkdir -p "$TC_STATE_DIR"
   sha=$(sha256 "$PEERS_FILE")
-  if [ "$sha" = "$(read_state applied.sha)" ]; then
+  if [ "$sha" = "$(read_state applied.sha)" ] && [ "$(read_state layout)" = 2 ]; then
     return 0
   fi
   result=$(check_peers_file "$PEERS_FILE")
@@ -120,6 +155,7 @@ main() {
   fi
   apply_peers "$(printf '%s' "$result" | jq -c '.peers')" || return 1
   write_atomic "$(state_file applied.sha)" "$sha"
+  write_atomic "$(state_file layout)" 2
 }
 
 if [ "${TC_SOURCED:-0}" != 1 ]; then

@@ -163,3 +163,44 @@ put_folder() {
     '. * {id: $id, label: $label, path: $path, type: $type, devices: $devices, rescanIntervalS: 3600, fsWatcherEnabled: true, fsWatcherDelayS: 10} * $extra')
   st_api PUT "/rest/config/folders/$1" "$pf_body" > /dev/null
 }
+
+lib_folder_ids() {
+  lfi_all=$(st_api GET /rest/config/folders) || return 1
+  printf '%s' "$lfi_all" | jq -r '.[] | select(.id | startswith("tc-lib-")) | .id'
+}
+
+set_ignores() {
+  si_n=0
+  while [ "$si_n" -lt 10 ]; do
+    if st_api POST "/rest/db/ignores?folder=$1" '{"ignore":[".DS_Store","Thumbs.db","._*"]}' > /dev/null 2>&1; then
+      return 0
+    fi
+    si_n=$((si_n + 1))
+    sleep 1
+  done
+  return 1
+}
+
+owner_folder_extra() {
+  ofe_total=$(df -Pk "$TC_LIBRARY_DIR" | awk 'NR==2 {print $2}')
+  if ! valid_int "$ofe_total"; then
+    log ERROR "could not read disk size"
+    return 1
+  fi
+  ofe_min=$(calc_min_free_mb "$ofe_total" "$(conf_get FREE_SPACE_PERCENT 10)" "$(conf_get FREE_SPACE_MIN_GB 1)")
+  jq -nc --arg order "$(conf_get PULL_ORDER smallestFirst)" --argjson mb "$ofe_min" --arg role "$(conf_get ROLE reader)" \
+    '{order: $order, minDiskFree: {value: $mb, unit: "MB"}}
+     + (if $role == "anchor" then {versioning: {type: "trashcan", params: {cleanoutDays: "30"}}} else {} end)'
+}
+
+put_owner_folder() {
+  pof_type=receiveonly
+  if [ "$1" = "$(conf_get OWNER)" ] && [ "$(conf_get ROLE reader)" != reader ]; then
+    pof_type=sendreceive
+  fi
+  pof_extra=$(owner_folder_extra) || return 1
+  put_folder "tc-lib-$1" "$1" "$TC_LIBRARY_DIR/$1" "$pof_type" "$2" "$pof_extra" || return 1
+  if ! set_ignores "tc-lib-$1"; then
+    log WARN "could not set the ignore list for $1"
+  fi
+}

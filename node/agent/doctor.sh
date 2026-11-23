@@ -73,14 +73,20 @@ check_syncthing() {
   else
     fail "Not connected to the gateway" "Check the network checks above. Make sure the owner approved this node."
   fi
-  dc_db=$(st_api GET "/rest/db/status?folder=tinycloud-library" 2> /dev/null || true)
-  dc_state=$(printf '%s' "$dc_db" | jq -r '.state // "unknown"' 2> /dev/null)
-  dc_errors=$(printf '%s' "$dc_db" | jq -r '.pullErrors // 0' 2> /dev/null)
-  if [ "$dc_state" = error ] || [ "${dc_errors:-0}" -gt 0 ]; then
-    warn "Library has sync errors ($dc_errors files)" "Run tinycloud logs syncthing to see which files."
-  else
-    ok "Library state: $dc_state"
+  dc_ids=$(lib_folder_ids 2> /dev/null || true)
+  if [ -z "$dc_ids" ]; then
+    warn "No library folders found" "Run tinycloud logs agent to see why first boot did not finish."
   fi
+  for dc_id in $dc_ids; do
+    dc_db=$(st_api GET "/rest/db/status?folder=$dc_id" 2> /dev/null || true)
+    dc_state=$(printf '%s' "$dc_db" | jq -r '.state // "unknown"' 2> /dev/null)
+    dc_errors=$(printf '%s' "$dc_db" | jq -r '.pullErrors // 0' 2> /dev/null)
+    if [ "$dc_state" = error ] || [ "${dc_errors:-0}" -gt 0 ]; then
+      warn "Folder ${dc_id#tc-lib-} has sync errors ($dc_errors files)" "Run tinycloud logs syncthing to see which files."
+    else
+      ok "Folder ${dc_id#tc-lib-} state: $dc_state"
+    fi
+  done
 }
 
 check_disk() {

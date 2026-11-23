@@ -1,7 +1,6 @@
 #!/bin/sh
 . "${TC_ROOT:-/app}/agent/lib.sh"
 
-LIB_FOLDER=tinycloud-library
 STATUS_DIR=${TC_STATUS_DIR:-$TC_SYSTEM_DIR/status-out}
 
 list_paths() {
@@ -29,9 +28,14 @@ collect_booted() {
 }
 
 collect_status() {
-  cs_db=$(st_api GET "/rest/db/status?folder=$LIB_FOLDER") || return 1
-  cs_global=$(printf '%s' "$cs_db" | jq -r '.globalBytes // 0')
-  cs_local=$(printf '%s' "$cs_db" | jq -r '.localBytes // 0')
+  cs_ids=$(lib_folder_ids) || return 1
+  cs_global=0
+  cs_local=0
+  for cs_id in $cs_ids; do
+    cs_db=$(st_api GET "/rest/db/status?folder=$cs_id") || return 1
+    cs_global=$((cs_global + $(printf '%s' "$cs_db" | jq -r '.globalBytes // 0')))
+    cs_local=$((cs_local + $(printf '%s' "$cs_db" | jq -r '.localBytes // 0')))
+  done
   if [ "$cs_global" -le 0 ]; then
     st_percent=100
   else

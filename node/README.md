@@ -10,7 +10,7 @@ curl -fsSL https://raw.githubusercontent.com/JustinOros/tinycloud/main/setup-nod
 
 It asks for a node name, owner, and role, then for the five lines the gateway owner gives you (`tinycloud-gw config` on the gateway prints them). It installs Docker if needed, starts the node, and prints one line. Send that line to the gateway owner. They run it, read the code back to you, and your node starts syncing.
 
-Your files live in `data/library`, and the setup makes a shortcut named `tinycloud` in your home folder. Copy files in from another machine with `scp book.epub NODE:tinycloud/`. Check on things with `tinycloud doctor`.
+Your files live in `data/library`, one folder per owner. Yours is `data/library/OWNER`, and every other owner's folder is read only. The setup makes a shortcut named `tinycloud` in your home folder. Copy files into your own folder from another machine with `scp book.epub NODE:tinycloud/OWNER/`. Check on things with `tinycloud doctor`.
 
 Setup also asks whether to install Debian security updates automatically (default yes), whether to reboot automatically when an update needs it (default yes), and what time to do it (default 3:00 AM, the board's local time). Skip the questions with `--auto-update yes|no`, `--auto-reboot yes|no`, and `--reboot-time "3:00 AM"`. With `--yes` and no flags, updates are left as they are.
 

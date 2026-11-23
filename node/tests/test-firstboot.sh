@@ -55,18 +55,19 @@ assert_jq "no usage reports or crash reports" "$opts" '.urAccepted == -1 and .cr
 gw=$(body_of "PUT /rest/config/devices/$GW")
 assert_jq "gateway device direct address" "$gw" '.addresses == ["tcp://gw.example.com:22000"] and .introducer == false and .autoAcceptFolders == false'
 
-lib=$(body_of 'PUT /rest/config/folders/tinycloud-library')
+lib=$(body_of 'PUT /rest/config/folders/tc-lib-justin')
 assert_jq "anchor library send receive" "$lib" '.type == "sendreceive"'
 assert_jq "anchor has 30 day trashcan" "$lib" '.versioning.type == "trashcan" and .versioning.params.cleanoutDays == "30"'
 assert_jq "library order and min free" "$lib" '.order == "smallestFirst" and .minDiskFree.unit == "MB" and .minDiskFree.value >= 1024'
 assert_jq "library shared with self only" "$lib" "(.devices | length) == 1 and .devices[0].deviceID == \"$ME\""
-assert_jq "library path" "$lib" ".path == \"$TC_LIBRARY_DIR\""
+assert_jq "library path is the owner folder" "$lib" ".path == \"$TC_LIBRARY_DIR/justin\" and .label == \"justin\""
 
 assert_jq "peers folder receive only with gateway" "$(body_of 'PUT /rest/config/folders/tinycloud-peers')" '.type == "receiveonly" and (.devices | length) == 2'
 assert_jq "status folder send only with gateway" "$(body_of 'PUT /rest/config/folders/tc-status-rocky')" '.type == "sendonly" and (.devices | length) == 2'
 assert_jq "view folder receive only with gateway" "$(body_of 'PUT /rest/config/folders/tc-view-justin')" '.type == "receiveonly" and (.devices | length) == 2'
+assert_eq "layout marker written" 2 "$(cat "$TC_STATE_DIR/layout")"
 assert_eq "default folder removed" 1 "$(count_calls 'DELETE /rest/config/folders/default')"
-assert_contains "ignore list set" "$(body_of 'POST /rest/db/ignores?folder=tinycloud-library')" '._*'
+assert_contains "ignore list set" "$(body_of 'POST /rest/db/ignores?folder=tc-lib-justin')" '._*'
 assert_not_contains "token never logged" "$OUT" "$TOKEN"
 assert_not_contains "relay id never logged" "$OUT" "$RELAY"
 
@@ -76,7 +77,7 @@ assert_eq "second run does nothing" "$before" "$(wc -l < "$FAKE_DIR/calls")"
 
 setup reader
 run_main
-lib=$(body_of 'PUT /rest/config/folders/tinycloud-library')
+lib=$(body_of 'PUT /rest/config/folders/tc-lib-justin')
 assert_jq "reader library receive only" "$lib" '.type == "receiveonly"'
 assert_jq "reader has no versioning" "$lib" '(.versioning.type // "") == ""'
 

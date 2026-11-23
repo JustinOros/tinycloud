@@ -21,7 +21,11 @@ main() {
   valid_device_id "$lv_me" || { log ERROR "syncthing device id not valid"; return 1; }
 
   lv_only_me=$(jq -nc --arg me "$lv_me" '{devices: [{deviceID: $me}]}')
-  try st_api PATCH /rest/config/folders/tinycloud-library "$lv_only_me"
+  lv_ids=$(lib_folder_ids 2> /dev/null || true)
+  [ -n "$lv_ids" ] || lv_ids=tc-lib-$lv_owner
+  for lv_f in $lv_ids; do
+    try st_api PATCH "/rest/config/folders/$lv_f" "$lv_only_me"
+  done
   for lv_id in $(read_state managed.ids); do
     valid_device_id "$lv_id" && try st_api DELETE "/rest/config/devices/$lv_id"
   done

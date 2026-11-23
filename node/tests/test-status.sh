@@ -45,6 +45,17 @@ main > "$FAKE_DIR/out" 2>&1
 assert_eq "big change written" 1 "$(test -f "$STATUS_DIR/status.json" && echo 1 || echo 0)"
 
 setup
+printf '[{"id":"tc-lib-justin"},{"id":"tc-lib-finn"}]' > "$FAKE_DIR/folders.json"
+printf '{"state":"idle","globalBytes":1000,"localBytes":250,"pullErrors":0}' > "$FAKE_DIR/dbstatus.json"
+main > "$FAKE_DIR/out" 2>&1
+assert_eq "percent stored covers every owner folder" 25 "$(jq -r '.percent_stored' "$STATUS_DIR/status.json")"
+
+setup
+printf '[]' > "$FAKE_DIR/folders.json"
+main > "$FAKE_DIR/out" 2>&1
+assert_eq "no folders reads as fully stored" 100 "$(jq -r '.percent_stored' "$STATUS_DIR/status.json")"
+
+setup
 TC_UPTIME_FILE=$SANDBOX/uptime
 export TC_UPTIME_FILE
 TC_PID1_STAT=$SANDBOX/pid1stat

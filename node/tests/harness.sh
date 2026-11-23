@@ -67,6 +67,7 @@ new_sandbox() {
   : > "$FAKE_DIR/calls"
   printf '{"state":"idle","globalBytes":1000,"localBytes":500,"pullErrors":0}' > "$FAKE_DIR/dbstatus.json"
   printf '{"connections":{}}' > "$FAKE_DIR/connections.json"
+  printf '[{"id":"tc-lib-justin"},{"id":"tinycloud-peers"}]' > "$FAKE_DIR/folders.json"
   FAKE_FAIL=
   FAKE_RESTART=false
   PEERS_FILE=$TC_SYSTEM_DIR/peers/peers.json
@@ -89,8 +90,16 @@ fake_st_api() {
     "GET /rest/config/defaults/device")
       printf '{"deviceID":"","name":"","addresses":["dynamic"],"compression":"metadata","introducer":false,"autoAcceptFolders":false,"paused":false,"untrusted":false}'
       ;;
-    "GET /rest/config/folders/tinycloud-library") cat "$FAKE_DIR/library.json" ;;
-    "GET /rest/db/status?folder=tinycloud-library") cat "$FAKE_DIR/dbstatus.json" ;;
+    "GET /rest/config/folders") cat "$FAKE_DIR/folders.json" ;;
+    "GET /rest/config/folders/tinycloud-library")
+      [ -f "$FAKE_DIR/legacy.json" ] || return 1
+      cat "$FAKE_DIR/legacy.json"
+      ;;
+    "GET /rest/config/folders/tc-lib-"*)
+      [ -f "$FAKE_DIR/folder-${2##*/tc-lib-}.json" ] || return 1
+      cat "$FAKE_DIR/folder-${2##*/tc-lib-}.json"
+      ;;
+    "GET /rest/db/status?folder=tc-lib-"*) cat "$FAKE_DIR/dbstatus.json" ;;
     "GET /rest/system/connections") cat "$FAKE_DIR/connections.json" ;;
   esac
   return 0

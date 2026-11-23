@@ -63,44 +63,16 @@ restart_if_needed() {
   fi
 }
 
-set_ignores() {
-  si_n=0
-  while [ "$si_n" -lt 10 ]; do
-    if st_api POST "/rest/db/ignores?folder=$1" '{"ignore":[".DS_Store","Thumbs.db","._*"]}' > /dev/null 2>&1; then
-      return 0
-    fi
-    si_n=$((si_n + 1))
-    sleep 1
-  done
-  return 1
-}
-
 create_folders() {
   self_only=$(jq -nc --arg a "$my_id" '[{deviceID: $a}]')
   with_gateway=$(jq -nc --arg a "$my_id" --arg b "$gateway_id" '[{deviceID: $a}, {deviceID: $b}]')
   st_api DELETE /rest/config/folders/default > /dev/null 2>&1 || true
   gateway_addr=$(jq -nc --arg h "tcp://$host:22000" '[$h]')
   put_device "$gateway_id" gateway "$gateway_addr" || return 1
-  total_kb=$(df -Pk "$TC_LIBRARY_DIR" | awk 'NR==2 {print $2}')
-  if ! valid_int "$total_kb"; then
-    log ERROR "could not read disk size"
-    return 1
-  fi
-  min_mb=$(calc_min_free_mb "$total_kb" "$pct" "$min_gb")
-  folder_type=sendreceive
-  if [ "$role" = reader ]; then
-    folder_type=receiveonly
-  fi
-  extra=$(jq -nc --arg order "$order" --argjson mb "$min_mb" --arg role "$role" \
-    '{order: $order, minDiskFree: {value: $mb, unit: "MB"}}
-     + (if $role == "anchor" then {versioning: {type: "trashcan", params: {cleanoutDays: "30"}}} else {} end)')
-  put_folder tinycloud-library "TinyCloud Library" "$TC_LIBRARY_DIR" "$folder_type" "$self_only" "$extra" || return 1
+  put_owner_folder "$owner" "$self_only" || return 1
   put_folder tinycloud-peers "TinyCloud Peers" "$TC_SYSTEM_DIR/peers" receiveonly "$with_gateway" || return 1
   put_folder "tc-status-$node_name" "TinyCloud Status" "$TC_SYSTEM_DIR/status-out" sendonly "$with_gateway" || return 1
   put_folder "tc-view-$owner" "TinyCloud View" "$TC_SYSTEM_DIR/view" receiveonly "$with_gateway" || return 1
-  if ! set_ignores tinycloud-library; then
-    log WARN "could not set the ignore list"
-  fi
 }
 
 main() {
@@ -125,6 +97,7 @@ main() {
   create_folders || return 1
   mkdir -p "$TC_STATE_DIR"
   write_atomic "$(state_file device-id)" "$my_id"
+  write_atomic "$(state_file layout)" 2
   write_atomic "$(state_file firstboot.done)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   log INFO "first boot done for node $node_name role $role"
 }

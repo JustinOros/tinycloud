@@ -20,8 +20,8 @@ setup() {
   . "$TC_ROOT/agent/apply-peers.sh"
   st_api() { fake_st_api "$@"; }
   PEERS_FILE=$TC_SYSTEM_DIR/peers/peers.json
-  printf 'ROLE=%s\nGATEWAY_ID=%s\nPEERS_CONFIRM=%s\n' "${1:-contributor}" "$GW" "${2:-auto}" > "$TC_CONF"
-  printf '{"devices":[{"deviceID":"%s"},{"deviceID":"%s"}]}' "$ME" "$GW" > "$FAKE_DIR/library.json"
+  printf 'OWNER=justin\nROLE=%s\nGATEWAY_ID=%s\nPEERS_CONFIRM=%s\n' "${1:-contributor}" "$GW" "${2:-auto}" > "$TC_CONF"
+  printf '{"devices":[{"deviceID":"%s"}]}' "$ME" > "$FAKE_DIR/folder-justin.json"
 }
 
 peers_json() {
@@ -29,7 +29,7 @@ peers_json() {
 }
 
 peer() {
-  printf '{"name":"%s","id":"%s","role":"%s","owner":"justin","junk":"ignored"}' "$1" "$2" "$3"
+  printf '{"name":"%s","id":"%s","role":"%s","owner":"%s","junk":"ignored"}' "$1" "$2" "$3" "${4:-justin}"
 }
 
 run_main() {
@@ -47,8 +47,9 @@ assert_eq "self not added" 0 "$(count_calls "PUT /rest/config/devices/$ME")"
 assert_eq "peer 1 added" 1 "$(count_calls "PUT /rest/config/devices/$P1")"
 assert_eq "peer 2 added" 1 "$(count_calls "PUT /rest/config/devices/$P2")"
 assert_jq "device body has dynamic address and no introducer" "$(body_of "PUT /rest/config/devices/$P1")" '.addresses == ["dynamic"] and .introducer == false and .autoAcceptFolders == false and .name == "grace"'
-assert_jq "folder shares with new peers" "$(body_of 'PATCH /rest/config/folders/tinycloud-library')" "(.devices | map(.deviceID) | sort) == ([\"$ME\", \"$GW\", \"$P1\", \"$P2\"] | sort)"
-assert_eq "only the devices key is patched" '["devices"]' "$(body_of 'PATCH /rest/config/folders/tinycloud-library' | jq -c 'keys')"
+assert_jq "folder shares with new peers" "$(body_of 'PATCH /rest/config/folders/tc-lib-justin')" "(.devices | map(.deviceID) | sort) == ([\"$ME\", \"$P1\", \"$P2\"] | sort)"
+assert_eq "only the devices key is patched" '["devices"]' "$(body_of 'PATCH /rest/config/folders/tc-lib-justin' | jq -c 'keys')"
+assert_eq "layout marker written" 2 "$(cat "$TC_STATE_DIR/layout")"
 assert_eq "managed ids saved" "$(printf '%s\n%s' "$P1" "$P2")" "$(cat "$TC_STATE_DIR/managed.ids")"
 
 before=$(wc -l < "$FAKE_DIR/calls")
@@ -61,7 +62,54 @@ assert_eq "removal run ok" 0 "$RC"
 assert_eq "removed peer deleted" 1 "$(count_calls "DELETE /rest/config/devices/$P1")"
 assert_eq "kept peer not deleted" 0 "$(count_calls "DELETE /rest/config/devices/$P2")"
 assert_eq "gateway never deleted" 0 "$(count_calls "DELETE /rest/config/devices/$GW")"
-assert_jq "folder keeps gateway and self" "$(body_of 'PATCH /rest/config/folders/tinycloud-library')" "(.devices | map(.deviceID) | index(\"$GW\")) != null and (.devices | map(.deviceID) | index(\"$ME\")) != null"
+assert_jq "folder keeps self and drops the removed peer" "$(body_of 'PATCH /rest/config/folders/tc-lib-justin')" "(.devices | map(.deviceID) | index(\"$ME\")) != null and (.devices | map(.deviceID) | index(\"$P1\")) == null"
+
+setup
+peers_json "$(peer rocky "$ME" anchor),$(peer grace "$P1" anchor finn)" > "$PEERS_FILE"
+run_main
+assert_eq "new owner folder created" 1 "$(count_calls 'PUT /rest/config/folders/tc-lib-finn')"
+finn=$(body_of 'PUT /rest/config/folders/tc-lib-finn')
+assert_jq "other owner folder is receive only" "$finn" '.type == "receiveonly" and .label == "finn"'
+assert_jq "other owner folder path" "$finn" ".path == \"$TC_LIBRARY_DIR/finn\""
+assert_jq "other owner folder shared with me and peers" "$finn" "(.devices | map(.deviceID) | sort) == ([\"$ME\", \"$P1\"] | sort)"
+assert_contains "ignore list set for new folder" "$(body_of 'POST /rest/db/ignores?folder=tc-lib-finn')" '._*'
+assert_eq "own folder not recreated" 0 "$(count_calls 'PUT /rest/config/folders/tc-lib-justin')"
+
+setup
+printf '[{"id":"tc-lib-justin"},{"id":"tc-lib-finn"}]' > "$FAKE_DIR/folders.json"
+peers_json "$(peer rocky "$ME" anchor)" > "$PEERS_FILE"
+run_main
+assert_eq "folder of an owner that left is removed" 1 "$(count_calls 'DELETE /rest/config/folders/tc-lib-finn')"
+assert_eq "own folder kept" 0 "$(count_calls 'DELETE /rest/config/folders/tc-lib-justin')"
+assert_contains "log says files kept" "$OUT" "removed, files kept"
+
+setup
+printf '{"devices":[]}' > "$FAKE_DIR/legacy.json"
+peers_json "$(peer rocky "$ME" anchor)" > "$PEERS_FILE"
+run_main
+assert_eq "old library folder removed" 1 "$(count_calls 'DELETE /rest/config/folders/tinycloud-library')"
+assert_contains "old folder removal logged" "$OUT" "old tinycloud-library folder removed"
+
+setup
+rm -f "$FAKE_DIR/folder-justin.json"
+peers_json "$(peer rocky "$ME" anchor)" > "$PEERS_FILE"
+run_main
+assert_eq "missing own folder is created" 1 "$(count_calls 'PUT /rest/config/folders/tc-lib-justin')"
+assert_jq "own folder follows the role" "$(body_of 'PUT /rest/config/folders/tc-lib-justin')" '.type == "sendreceive"'
+
+setup reader
+rm -f "$FAKE_DIR/folder-justin.json"
+peers_json "$(peer rocky "$ME" reader),$(peer a "$P1" anchor)" > "$PEERS_FILE"
+run_main
+assert_jq "reader own folder receive only" "$(body_of 'PUT /rest/config/folders/tc-lib-justin')" '.type == "receiveonly"'
+
+setup
+peers_json "$(peer rocky "$ME" anchor)" > "$PEERS_FILE"
+run_main
+printf 'x\n' > "$TC_STATE_DIR/layout"
+before=$(wc -l < "$FAKE_DIR/calls")
+run_main
+assert_eq "old layout reapplies an unchanged file" 1 "$([ "$(wc -l < "$FAKE_DIR/calls")" -gt "$before" ] && echo 1 || echo 0)"
 
 setup
 peers_json "$(peer rocky "$ME" anchor)" > "$PEERS_FILE"
@@ -165,9 +213,15 @@ assert_eq "failed run does not save hash" "" "$(read_state applied.sha)"
 
 setup
 peers_json "$(peer a "$P1" anchor)" > "$PEERS_FILE"
-rm -f "$FAKE_DIR/library.json"
-FAKE_FAIL="GET /rest/config/folders"
+rm -f "$FAKE_DIR/folder-justin.json"
+FAKE_FAIL="PUT /rest/config/folders"
 run_main
-assert_eq "missing library folder returns error" 1 "$RC"
+assert_eq "folder create failure returns error" 1 "$RC"
+
+setup
+peers_json "$(peer a "$P1" anchor)" > "$PEERS_FILE"
+conf_set "$TC_CONF" OWNER "BAD OWNER"
+run_main
+assert_eq "bad owner returns error" 1 "$RC"
 
 finish
