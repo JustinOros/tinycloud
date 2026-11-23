@@ -1,6 +1,6 @@
 # TinyCloud design
 
-A private file cloud for trusted friends. Nodes sync your shared files through a gateway. More gateways can be added later. Nobody controls anyone else's node.
+A private file cloud for trusted friends. Nodes sync your shared files through a gateway. Clouds can be linked later. Nobody controls anyone else's node.
 
 ## Parts
 
@@ -217,22 +217,49 @@ A node shows a warning when it is offline, low on space, has name conflicts, has
 - Fix: build a new Linode, run `setup.sh`, restore the identity backup, and keep the same IP and hostname.
 - `tinycloud-gw backup` saves the gateway identity (keys, IDs, relay token, approved list).
 
-## Later: more than one gateway
+## Later: linked clouds
 
-- Each owner runs a gateway on their own Linode.
-- Every node lists all gateways. One is preferred, the rest are failover.
-- Which gateway a node uses and who owns it are separate. A node owned by justin can connect through finn's gateway.
-- Each owner signs their own node list. Nodes accept justin's signature only for `OWNER=justin` and finn's only for `OWNER=finn`.
-- Gateways are plain infrastructure: relay, discovery, sync. They cannot add devices.
-- Adding a gateway needs one owner's signature on the gateway list.
-- The library syncs to every node that its role allows.
-- Not built yet. The single gateway comes first.
+Not built yet. The single gateway comes first.
+
+- Each person runs their own cloud: their own gateway, nodes, and approvals. Nobody controls anyone else's node or gateway.
+- Clouds are linked by exchanging a gateway code. A link gives each side a read-only copy of the other's files, so more people means more copies.
+- Each owner's files live in one folder named for the owner. On disk it is `library/OWNER`, and its Syncthing ID is `tc-lib-OWNER`. Owner names must be unique across linked clouds, and a link that would repeat one is refused.
+- In its own cloud, an owner's folder works as it does today. In a linked cloud, its nodes hold that folder as Receive Only, so they never send changes back.
+- Two clouds can link one way or both ways. Each side chooses which of its own folders to offer, and which offered folders to accept. The default is none.
+
+### The link
+
+- The gateway code holds the gateway host, its three IDs, its relay token, the device IDs of its nodes, and the folders on offer. The relay token is secret, so send the code privately.
+- The owner reads a summary of what the code offers and says yes. Nothing is added before that.
+- A linked node is a device that gets only the folders that were accepted, as Receive Only. It never gets the introducer feature, and it can never add devices.
+- Nodes also list the linked gateway's discovery and relay servers, so a node can find and reach linked nodes through either gateway.
+- Commands, names not final: `tinycloud-gw link export`, `link add CODE`, `link list`, `link remove NAME`. Each is logged in `audit.log`.
+
+### When a gateway goes down
+
+- Syncing between existing nodes continues through the other gateway's discovery and relay.
+- New approvals and the dashboard for that cloud wait until its gateway is back.
+- A copy on a linked node is a backup, not a failover. To recover, copy files off the linked node by hand.
+
+### Costs
+
+- Every mirrored folder uses disk on every linked node. The usual free space floor applies, and a partial node stores what fits.
+- Status and alerts stay per cloud. Linked nodes do not appear on each other's dashboards.
+
+### Build order
+
+1. Per-owner folders, and moving existing nodes from `tinycloud-library` to them.
+2. Nodes accept extra discovery and relay servers.
+3. The link commands.
+
+Test with a second gateway and a test node standing in for a friend's cloud.
 
 ## Known limits
 
 - A gateway owner can add a device that then gets the library. `PEERS_CONFIRM=manual` blocks that on a node.
 - All sync goes through the Nanode relay, so its transfer cap and one CPU are the ceiling.
 - Admins and anchors can read the data.
+- Receive Only on a linked node protects against mistakes, not against a friend who modifies his own Syncthing. Link only people you trust.
 - Syncthing is the main attack surface. Keep it updated.
 
 ## Verified
