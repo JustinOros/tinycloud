@@ -99,7 +99,7 @@ priv() {
 
 ensure_priv() {
   if ! running_as_root; then
-    say "Writing a disk needs your password."
+    say "Writing to the disk needs administrator rights. Enter the password you use to log in to this computer."
     sudo -v
   fi
 }
@@ -646,7 +646,7 @@ collect_headless() {
       if [ "$ASSUME_YES" = true ]; then
         return 0
       fi
-      printf 'Set it up so it needs no screen or keyboard? [Y/n]: '
+      printf 'Preconfigure the card (username, password, Wi-Fi, SSH key) so the board boots ready, with no screen or keyboard? [Y/n]: '
       read -r ch_answer || return 1
       case $ch_answer in
         '' | [Yy] | [Yy][Ee][Ss]) ;;
