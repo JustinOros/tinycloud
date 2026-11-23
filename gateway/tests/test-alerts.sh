@@ -212,8 +212,19 @@ assert_eq "unknown connection state keeps the problem" 1 "$(sent_count)"
 assert_jq "unknown state keeps the entry" "$(cat "$GW_STATE/alerts.json")" '.p["grace:offline"] != null'
 view '[]'
 tick $((T0 + 900))
-assert_eq "removed node clears quietly" 1 "$(sent_count)"
+assert_eq "removed node is announced" 2 "$(sent_count)"
+assert_contains "removed heading" "$(cat "$SANDBOX/sent")" "REMOVED"
+assert_contains "removed text" "$(cat "$SANDBOX/sent")" "grace (justin) was removed from the cloud"
 assert_jq "removed node leaves no state" "$(cat "$GW_STATE/alerts.json")" '.p == {}'
+
+reset
+alert_set url 'https://ntfy.sh/t' > /dev/null
+alert_set offline 60m > /dev/null
+view "[$(node grace false)]"
+tick "$T0"
+view '[]'
+tick $((T0 + 300))
+assert_eq "removed node with no alert stays quiet" 0 "$(sent_count)"
 
 reset
 alert_set url 'https://ntfy.sh/t' > /dev/null

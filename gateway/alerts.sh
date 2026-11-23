@@ -315,6 +315,10 @@ alert_text() {
   esac
 }
 
+alert_removed_text() {
+  printf '%s (%s) was removed from the cloud' "$2" "$3"
+}
+
 alert_cleared_text() {
   case $1 in
     offline) printf '%s (%s) is back online after %s' "$2" "$3" "$(fmt_minutes "$5")" ;;
@@ -353,6 +357,10 @@ ALERT_JQ='
                 and ((.value.name as $nm | $unknown | index($nm)) == null or .value.kind != "offline")) ]) as $cleared
   | ([ $old | to_entries[]
        | select((.value.name as $nm | $unknown | index($nm)) != null and .value.kind == "offline") ]) as $held
+  | ([ $old | to_entries[]
+       | select(.value.notified > 0
+                and ((.value.name as $nm | $names | index($nm)) == null)) | .value ]
+     | unique_by(.name)) as $gone
   | ([ $conds[] | . as $c
       | ($old[$c.key] // {since: $now, notified: 0, reminded: 0}) as $e
       | {key: $c.key, value: ($e + {name: $c.name, owner: $c.owner, kind: $c.kind, delay: $c.delay})} ]) as $active
@@ -371,7 +379,8 @@ ALERT_JQ='
       p: (($next + $held) | map({key, value: (.value | {name, owner, kind, since, notified, reminded})}) | from_entries),
       problems: ($due | map(.value | [.kind, .name, .owner, mins($now; .since)])),
       reminders: ($remind | map(.value | [.kind, .name, .owner, mins($now; .since)])),
-      recovered: (if $cfg.recovered then ($cleared | map(select(.value.notified > 0) | .value | [.kind, .name, .owner, mins($now; .since)])) else [] end)
+      recovered: (if $cfg.recovered then ($cleared | map(select(.value.notified > 0) | .value | [.kind, .name, .owner, mins($now; .since)])) else [] end),
+      removed: (if $cfg.recovered then ($gone | map([.kind, .name, .owner, mins($now; .since)])) else [] end)
     }'
 
 alert_state_file() {
@@ -421,6 +430,7 @@ run_alerts() {
   ra_new=$(alert_lines "$(printf '%s' "$ra_out" | jq -c '.problems')" alert_text)
   ra_old=$(alert_lines "$(printf '%s' "$ra_out" | jq -c '.reminders')" alert_text)
   ra_ok=$(alert_lines "$(printf '%s' "$ra_out" | jq -c '.recovered')" alert_cleared_text)
+  ra_gone=$(alert_lines "$(printf '%s' "$ra_out" | jq -c '.removed')" alert_removed_text)
   [ -n "$ra_new" ] && ra_msg="$ra_msg
 NEW
 $ra_new"
@@ -430,6 +440,9 @@ $ra_old"
   [ -n "$ra_ok" ] && ra_msg="$ra_msg
 RESOLVED
 $ra_ok"
+  [ -n "$ra_gone" ] && ra_msg="$ra_msg
+REMOVED
+$ra_gone"
   if [ -n "$ra_msg" ]; then
     if ! alert_send "TinyCloud$ra_msg"; then
       log ERROR "alert could not be sent, will try again"
