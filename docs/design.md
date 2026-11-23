@@ -286,6 +286,7 @@ Test with a second gateway and a test node standing in for a friend's cloud.
 - A missed heartbeat reaches Discord: with the aggregate timer stopped, healthchecks.io posted DOWN after the grace time, and UP when the timer came back.
 - Swapping a node's SD card works: a new card on a new image joined as the same node after `tinycloud-gw remove` and `approve`, re-synced 4 GB, and Discord showed NEW while it was away and RESOLVED when it returned.
 - The firewall works on a real board: from another host on the LAN only SSH answered, and the Syncthing, web and sync ports were dropped.
+- Local discovery is off on a real node, and its peer traffic (4.4 GB from another node) ran only through the relay. Two nodes on the same network have not been tested together.
 - Gateway RAM is fine on 1 GB with 2 nodes: the three containers use about 58 MB and over half the memory is free. Not yet measured with many nodes.
 - Per-owner folders work on real nodes: each owner's books sync between a Docker node on Unraid and an Orange Pi, and a delete on one node reaches the other.
 - The optional SMB share works on an Orange Pi: a file copied from a Mac over SMB arrived on the other node, and only the TinyCloud share is listed.
@@ -294,7 +295,6 @@ Test with a second gateway and a test node standing in for a friend's cloud.
 
 ## Still to verify
 
-- Nodes on the same LAN do not try direct connections.
 - Min free space and pull order behave on a nearly full card.
 - No secret in any log or support bundle.
 - Alerts reach a real ntfy topic.
