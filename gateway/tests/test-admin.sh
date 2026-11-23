@@ -208,7 +208,9 @@ assert_eq "only 10 backups kept" 10 "$(find "$GW_BACKUP_DIR" -name 'tinycloud-ga
 
 : > "$FAKE/calls"
 rm -rf "$GW_HOME/data/syncthing/config" "$GW_HOME/.env"
+printf '[{"name":"stray"}]' > "$GW_STATE/leftover.json"
 out=$(printf 'yes\n' | cmd_restore "$file" 2>&1)
+assert_eq "restore drops state that the backup does not have" 0 "$([ -e "$GW_STATE/leftover.json" ] && echo 1 || echo 0)"
 assert_contains "restore done" "$out" "restored"
 assert_contains "restore stops stack" "$(cat "$FAKE/calls")" "dc down"
 assert_contains "restore starts stack" "$(cat "$FAKE/calls")" "dc up -d"

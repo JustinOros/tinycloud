@@ -553,6 +553,8 @@ do_restore() {
   echo "This replaces the gateway identity on this server with the backup."
   confirm || { echo "cancelled"; return 1; }
   dc down || { log ERROR "could not stop the stack"; return 1; }
+  find "$GW_STATE" -mindepth 1 -maxdepth 1 ! -name .lock -exec rm -rf {} + 2> /dev/null
+  rm -f "$GW_HOME/alerts.conf"
   tar xzf "$rs_file" -C "$GW_HOME" || { log ERROR "could not unpack the backup"; return 1; }
   own "$GW_HOME/data"
   ensure_folder_dir tinycloud-peers
