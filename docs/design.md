@@ -282,6 +282,7 @@ Test with a second gateway and a test node standing in for a friend's cloud.
 - Offline and resolved alerts reach a real Discord webhook, with the wait time set by the owner.
 - The heartbeat pings healthchecks.io, which posts to Discord.
 - `tinycloud-gw backup` and `restore` work on a real server: a gateway identity restored onto a second Linode in another region matched the original, and restoring the second server's own backup put it back.
+- The weekly backup timer works on the real gateway: its service saved a private backup on its own.
 - Per-owner folders work on real nodes: each owner's books sync between a Docker node on Unraid and an Orange Pi, and a delete on one node reaches the other.
 - The optional SMB share works on an Orange Pi: a file copied from a Mac over SMB arrived on the other node, and only the TinyCloud share is listed.
 - Linked clouds work between two real gateways: a file added on a node in one cloud reached both nodes in the other, the other cloud's own files stayed home because they were not accepted, a delete on a receive-only node did not travel back, and removing the link dropped the other cloud's folder from the nodes.
