@@ -39,6 +39,13 @@ assert_not_contains "folders untouched" "$calls" "/rest/config/folders"
 assert_not_contains "devices untouched" "$calls" "/rest/config/devices"
 assert_eq "no first boot marker written" 0 "$(test -f "$TC_STATE_DIR/firstboot.done" && echo 1 || echo 0)"
 
+printf '[{"host":"gw.finn.example","relay_id":"%s","disc_id":"%s","token":"fintoken"}]' "$(mkid F)" "$(mkid G)" > "$TC_STATE_DIR/links.json"
+: > "$FAKE_DIR/calls"
+relay_main > /dev/null 2>&1
+opts=$(grep '^PATCH /rest/config/options' "$FAKE_DIR/calls" | sed 's/^PATCH \/rest\/config\/options //')
+assert_jq "linked gateways stay in the options" "$opts" '(.listenAddresses | length) == 2 and (.globalAnnounceServers | length) == 2'
+rm -f "$TC_STATE_DIR/links.json"
+
 FAKE_RESTART=true
 : > "$FAKE_DIR/calls"
 relay_main > /dev/null 2>&1

@@ -84,6 +84,8 @@ An agent applies it only if every entry is valid:
 
 Anything else rejects the whole file. Unknown fields are ignored.
 
+Optional `links`: up to 16 linked gateways, each with `host`, `relay_id`, `disc_id` and `token`. A node adds each one's discovery and relay servers next to its own gateway's. Bad or duplicate entries reject the whole file. Without `links`, nothing changes.
+
 The agent changes two things only: which devices exist, and which devices get the owner folders. It also creates a folder for each owner it sees, and removes the folder setting, never the files, for an owner who has left. Readers skip other readers.
 
 Optional: `PEERS_CONFIRM=manual` makes the node's owner confirm each new peer first.
@@ -233,7 +235,7 @@ Not built yet. The single gateway comes first.
 - The gateway code holds the gateway host, its three IDs, its relay token, the device IDs of its nodes, and the folders on offer. The relay token is secret, so send the code privately.
 - The owner reads a summary of what the code offers and says yes. Nothing is added before that.
 - A linked node is a device that gets only the folders that were accepted, as Receive Only. It never gets the introducer feature, and it can never add devices.
-- Nodes also list the linked gateway's discovery and relay servers, so a node can find and reach linked nodes through either gateway.
+- Nodes also list the linked gateway's discovery and relay servers, so a node can find and reach linked nodes through either gateway. Built: a node reads them from the optional `links` list in `peers.json`. The link commands that write that list are not built yet.
 - Commands, names not final: `tinycloud-gw link export`, `link add CODE`, `link list`, `link remove NAME`. Each is logged in `audit.log`.
 
 ### When a gateway goes down

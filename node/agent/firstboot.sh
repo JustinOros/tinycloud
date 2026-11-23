@@ -42,10 +42,22 @@ load_settings() {
   fi
 }
 
+linked_gateways() {
+  if [ -s "$(state_file links.json)" ]; then
+    cat "$(state_file links.json)"
+  else
+    printf '[]'
+  fi
+}
+
 apply_options() {
   options=$(jq -nc --arg disc "https://$host:8443/?id=$disc_id" --arg relay "relay://$host:22067/?id=$relay_id&token=$token" \
-    '{globalAnnounceEnabled: true, globalAnnounceServers: [$disc], localAnnounceEnabled: false, natEnabled: false,
-      relaysEnabled: true, listenAddresses: [$relay], stunServers: [], urAccepted: -1,
+    --argjson links "$(linked_gateways)" \
+    '{globalAnnounceEnabled: true,
+      globalAnnounceServers: ([$disc] + ($links | map("https://\(.host):8443/?id=\(.disc_id)"))),
+      localAnnounceEnabled: false, natEnabled: false, relaysEnabled: true,
+      listenAddresses: ([$relay] + ($links | map("relay://\(.host):22067/?id=\(.relay_id)&token=\(.token)"))),
+      stunServers: [], urAccepted: -1,
       crashReportingEnabled: false, startBrowser: false, autoUpgradeIntervalH: 0}')
   if ! st_api PATCH /rest/config/options "$options" > /dev/null; then
     log ERROR "could not set syncthing options"

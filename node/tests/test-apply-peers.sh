@@ -224,4 +224,64 @@ conf_set "$TC_CONF" OWNER "BAD OWNER"
 run_main
 assert_eq "bad owner returns error" 1 "$RC"
 
+DISC2=$(mkid F)
+RELAY2=$(mkid G)
+link() {
+  printf '{"host":"%s","relay_id":"%s","disc_id":"%s","token":"%s"}' "${1:-gw.finn.example}" "${2:-$RELAY2}" "${3:-$DISC2}" "${4:-fintoken}"
+}
+links_conf() {
+  printf 'NODE_NAME=rocky\nGATEWAY_HOST=gw.example.com\nRELAY_ID=%s\nDISCOVERY_ID=%s\nRELAY_TOKEN=owntoken\n' "$(mkid H)" "$(mkid I)" >> "$TC_CONF"
+}
+
+setup
+links_conf
+printf '{"version":1,"peers":[%s],"links":[%s]}' "$(peer rocky "$ME" anchor)" "$(link)" > "$PEERS_FILE"
+run_main
+assert_eq "links file applies" 0 "$RC"
+opts=$(body_of 'PATCH /rest/config/options')
+assert_jq "linked discovery server added after the own one" "$opts" "(.globalAnnounceServers | length) == 2 and .globalAnnounceServers[1] == \"https://gw.finn.example:8443/?id=$DISC2\""
+assert_jq "linked relay added after the own one" "$opts" "(.listenAddresses | length) == 2 and .listenAddresses[1] == \"relay://gw.finn.example:22067/?id=$RELAY2&token=fintoken\" and (.listenAddresses[0] | startswith(\"relay://gw.example.com:22067/\"))"
+assert_contains "links applied is logged" "$OUT" "linked gateways applied: 1"
+assert_not_contains "link token never logged" "$OUT" "fintoken"
+
+: > "$FAKE_DIR/calls"
+rm -f "$TC_STATE_DIR/applied.sha"
+run_main
+assert_eq "unchanged links are not applied again" 0 "$(count_calls 'PATCH /rest/config/options')"
+
+FAKE_RESTART=true
+printf '{"version":1,"peers":[%s],"links":[]}' "$(peer rocky "$ME" anchor)" > "$PEERS_FILE"
+run_main
+assert_jq "removing the links restores the single servers" "$(body_of 'PATCH /rest/config/options')" '(.globalAnnounceServers | length) == 1 and (.listenAddresses | length) == 1'
+assert_eq "syncthing restarts when needed" 1 "$(count_calls 'POST /rest/system/restart')"
+FAKE_RESTART=false
+
+setup
+printf '{"version":1,"peers":[%s]}' "$(peer rocky "$ME" anchor)" > "$PEERS_FILE"
+run_main
+assert_eq "no links and none before changes no options" 0 "$(count_calls 'PATCH /rest/config/options')"
+
+for bad in \
+  '[{"host":"bad host","relay_id":"R","disc_id":"D","token":"t"}]' \
+  "[$(link gw.finn.example NOPE)]" \
+  "[$(link gw.finn.example "$RELAY2" "$DISC2" 'bad token!')]" \
+  "[$(link),$(link)]" \
+  '"notalist"'; do
+  setup
+  links_conf
+  printf '{"version":1,"peers":[%s],"links":%s}' "$(peer rocky "$ME" anchor)" "$bad" > "$PEERS_FILE"
+  run_main
+  assert_contains "bad links reject the file" "$OUT" "peers.json rejected"
+  assert_eq "bad links change nothing" 0 "$(count_calls PATCH)"
+done
+
+setup
+links_conf
+printf '{"version":1,"peers":[%s],"links":[%s]}' "$(peer rocky "$ME" anchor)" "$(link)" > "$PEERS_FILE"
+run_main
+printf '[]' > "$TC_STATE_DIR/links.json"
+rm -f "$TC_STATE_DIR/applied.sha"
+run_main
+assert_jq "options use the saved links" "$(body_of 'PATCH /rest/config/options')" '(.listenAddresses | length) == 2'
+
 finish

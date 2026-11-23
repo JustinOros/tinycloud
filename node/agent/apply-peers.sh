@@ -1,5 +1,8 @@
 #!/bin/sh
-. "${TC_ROOT:-/app}/agent/lib.sh"
+AP_OUTER_SOURCED=${TC_SOURCED:-0}
+TC_SOURCED=1
+. "${TC_ROOT:-/app}/agent/firstboot.sh"
+TC_SOURCED=$AP_OUTER_SOURCED
 
 PEERS_FILE=${TC_PEERS_FILE:-$TC_SYSTEM_DIR/peers/peers.json}
 
@@ -19,7 +22,15 @@ elif (.peers | all(.owner | test("\\A[a-z0-9-]{1,32}\\z")) | not) then fail("bad
 elif (.peers | all(.role | IN("anchor", "contributor", "partial", "reader")) | not) then fail("bad role")
 elif (.peers | map(.id) | unique | length) != (.peers | length) then fail("duplicate device id")
 elif (.peers | map(.name) | unique | length) != (.peers | length) then fail("duplicate node name")
-else {ok: true, peers: (.peers | map({id, name, role, owner}))}
+elif ((.links // []) | type) != "array" then fail("links is not a list")
+elif ((.links // []) | length) > 16 then fail("too many links")
+elif ((.links // []) | all(type == "object") | not) then fail("link is not an object")
+elif ((.links // []) | all((.host | txt) and (.relay_id | txt) and (.disc_id | txt) and (.token | txt)) | not) then fail("link field missing or not text")
+elif ((.links // []) | all(.host | test("\\A[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?\\z")) | not) then fail("bad link host")
+elif ((.links // []) | all((.relay_id | test("\\A[A-Z2-7]{7}(-[A-Z2-7]{7}){7}\\z")) and (.disc_id | test("\\A[A-Z2-7]{7}(-[A-Z2-7]{7}){7}\\z"))) | not) then fail("bad link id")
+elif ((.links // []) | all(.token | test("\\A[A-Za-z0-9_-]{1,128}\\z")) | not) then fail("bad link token")
+elif ((.links // []) | map(.host) | unique | length) != ((.links // []) | length) then fail("duplicate link host")
+else {ok: true, peers: (.peers | map({id, name, role, owner})), links: ((.links // []) | map({host, relay_id, disc_id, token}))}
 end
 '
 
@@ -135,6 +146,18 @@ apply_peers() {
   log INFO "peers applied: added=[$ap_added] removed=$(printf '%s' "$ap_remove" | jq 'length') pending=$(printf '%s' "$ap_pending" | jq 'length')"
 }
 
+apply_links() {
+  al_old=$(linked_gateways)
+  if [ "$al_old" = "$1" ]; then
+    return 0
+  fi
+  load_settings || return 1
+  write_atomic "$(state_file links.json)" "$1"
+  apply_options || return 1
+  restart_if_needed || return 1
+  log INFO "linked gateways applied: $(printf '%s' "$1" | jq 'length')"
+}
+
 main() {
   if [ ! -f "$PEERS_FILE" ]; then
     log INFO "no peers file yet"
@@ -154,6 +177,7 @@ main() {
     return 0
   fi
   apply_peers "$(printf '%s' "$result" | jq -c '.peers')" || return 1
+  apply_links "$(printf '%s' "$result" | jq -c '.links')" || return 1
   write_atomic "$(state_file applied.sha)" "$sha"
   write_atomic "$(state_file layout)" 2
 }
