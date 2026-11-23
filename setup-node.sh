@@ -890,6 +890,10 @@ main() {
   setup_firewall || return 1
   setup_ssh_hardening || return 1
   setup_smb || return 1
+  if [ "$FIREWALL" != yes ] && [ -n "$SMB" ] && [ -f "$HARDEN_FW_FILE" ]; then
+    FIREWALL=yes
+    setup_firewall || return 1
+  fi
   setup_autoupdate || return 1
   link_command || return 1
   setup_user

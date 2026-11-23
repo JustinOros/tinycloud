@@ -153,6 +153,15 @@ assert_contains "bad smb guest flag refused" "$out" "--smb-guest must be yes or 
 out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role contributor --config "$SANDBOX/lines")
 assert_not_contains "smb off by default" "$out" "SMB:"
 unset TC_SMB_PASSWORD
+HARDEN_FW_FILE=$SANDBOX/existing-fw.nft
+export HARDEN_FW_FILE
+touch "$HARDEN_FW_FILE"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role contributor --config "$SANDBOX/lines" --smb yes --smb-mode ro --smb-guest yes)
+assert_contains "smb refreshes an existing firewall" "$out" "+ write $HARDEN_FW_FILE"
+rm -f "$HARDEN_FW_FILE"
+out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role contributor --config "$SANDBOX/lines" --smb yes --smb-mode ro --smb-guest yes)
+assert_not_contains "no firewall file means no firewall step" "$out" "+ write $HARDEN_FW_FILE"
+unset HARDEN_FW_FILE
 out=$(run_setup debian13 /dev/null --dry-run --yes --name adrian --owner justin --role contributor --config "$SANDBOX/lines" --smb yes)
 assert_contains "yes mode needs a password variable" "$out" "set TC_SMB_PASSWORD"
 TC_SMB_PASSWORD=short
