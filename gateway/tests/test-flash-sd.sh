@@ -1,5 +1,9 @@
 #!/bin/sh
 set -u
+[ "$(uname -s)" = Linux ] || {
+  echo "test-flash-sd.sh runs on Linux only, skipping"
+  exit 0
+}
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 . "$HERE/harness.sh"
