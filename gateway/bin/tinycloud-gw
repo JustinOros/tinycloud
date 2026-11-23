@@ -3,9 +3,11 @@ GW_HOME=${GW_HOME:-/opt/tinycloud-gateway}
 GW_LIB_DIR=${GW_LIB_DIR:-$GW_HOME}
 . "$GW_LIB_DIR/lib.sh"
 . "$GW_LIB_DIR/alerts.sh"
+. "$GW_LIB_DIR/link.sh"
 
 GW_STATE=$GW_HOME/state
 APPROVED=$GW_STATE/approved.json
+LINKS=$GW_STATE/links.json
 AUDIT=$GW_HOME/audit.log
 FOLDERS_DIR=$GW_HOME/data/syncthing
 BACKUP_DIR=${GW_BACKUP_DIR:-/root/tinycloud-backup}
@@ -19,6 +21,11 @@ usage: tinycloud-gw COMMAND
   approve NAME DEVICEID ROLE OWNER [--yes]   add a node
   remove NAME [--yes]                        remove a node
   list                                       show nodes and who is online
+  link export                                print a code that links another cloud to this one
+  link add NAME CODE [--accept O,..] [--offer O,..] [--yes]
+                                             link a cloud, or update a link
+  link list                                  show linked clouds
+  link remove NAME [--yes]                   unlink a cloud
   config                                     show the lines every node needs
   aggregate                                  rebuild the status views
   view                                       print the full status view as JSON
@@ -141,7 +148,9 @@ publish_peers() {
   fi
   ensure_folder_dir tinycloud-peers
   pp_dir=$(folder_dir tinycloud-peers)
-  printf '%s' "$pp_list" | jq -c '{version: 1, peers: map({id, name, role, owner})}' > "$pp_dir/.syncthing.peers.json.tmp"
+  pp_links=$(load_links)
+  printf '%s' "$pp_list" | jq -c --argjson l "$pp_links" \
+    "{version: 1, peers: (map({id, name, role, owner}) + (\$l | $LINK_PEERS)), links: (\$l | map({host, relay_id, disc_id, token}))}" > "$pp_dir/.syncthing.peers.json.tmp"
   mv "$pp_dir/.syncthing.peers.json.tmp" "$pp_dir/peers.json"
   own "$pp_dir"
   if ! st_api POST "/rest/db/scan?folder=tinycloud-peers" > /dev/null; then
@@ -610,6 +619,7 @@ main() {
     approve) cmd_approve "$@" ;;
     remove) cmd_remove "$@" ;;
     list) cmd_list ;;
+    link) cmd_link "$@" ;;
     config) cmd_config ;;
     aggregate) cmd_aggregate ;;
     view) cmd_view ;;

@@ -33,10 +33,14 @@ Check that the code it shows matches the one on the node, then type `yes`.
 | `tinycloud-gw config` | the five lines every node needs |
 | `tinycloud-gw aggregate` | rebuilds the status views (a timer runs it every 5 minutes) |
 | `tinycloud-gw view` | prints the full status view as JSON |
+| `tinycloud-gw link export` | prints a code that links another cloud to this one |
+| `tinycloud-gw link add NAME CODE` | links a cloud, or updates a link, after asking what to send and receive |
+| `tinycloud-gw link list` | linked clouds |
+| `tinycloud-gw link remove NAME` | unlinks a cloud |
 | `tinycloud-gw backup` | saves the gateway identity to `/root/tinycloud-backup/` |
 | `tinycloud-gw restore FILE` | puts a saved identity back |
 
-Every approve, remove, backup, and restore is logged in `/opt/tinycloud-gateway/audit.log`.
+Every approve, remove, link, backup, and restore is logged in `/opt/tinycloud-gateway/audit.log`.
 
 ## Dashboard
 

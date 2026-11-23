@@ -86,6 +86,8 @@ Anything else rejects the whole file. Unknown fields are ignored.
 
 Optional `links`: up to 16 linked gateways, each with `host`, `relay_id`, `disc_id` and `token`. A node adds each one's discovery and relay servers next to its own gateway's. Bad or duplicate entries reject the whole file. Without `links`, nothing changes.
 
+Optional `folders` on a peer: owner names. A node shares that owner's folder with the peer only if it is listed. Without `folders`, the peer gets every folder.
+
 The agent changes two things only: which devices exist, and which devices get the owner folders. It also creates a folder for each owner it sees, and removes the folder setting, never the files, for an owner who has left. Readers skip other readers.
 
 Optional: `PEERS_CONFIRM=manual` makes the node's owner confirm each new peer first.
@@ -222,7 +224,7 @@ A node shows a warning when it is offline, low on space, has name conflicts, has
 
 ## Later: linked clouds
 
-Not built yet. The single gateway comes first.
+Built, but only tested with fake data so far. Not yet tried with two real clouds.
 
 - Each person runs their own cloud: their own gateway, nodes, and approvals. Nobody controls anyone else's node or gateway.
 - Clouds are linked by exchanging a gateway code. A link gives each side a read-only copy of the other's files, so more people means more copies.
@@ -232,11 +234,15 @@ Not built yet. The single gateway comes first.
 
 ### The link
 
-- The gateway code holds the gateway host, its three IDs, its relay token, the device IDs of its nodes, and the folders on offer. The relay token is secret, so send the code privately.
-- The owner reads a summary of what the code offers and says yes. Nothing is added before that.
-- A linked node is a device that gets only the folders that were accepted, as Receive Only. It never gets the introducer feature, and it can never add devices.
-- Nodes also list the linked gateway's discovery and relay servers, so a node can find and reach linked nodes through either gateway. Built: a node reads them from the optional `links` list in `peers.json`. The link commands that write that list are not built yet.
-- Commands, names not final: `tinycloud-gw link export`, `link add CODE`, `link list`, `link remove NAME`. Each is logged in `audit.log`.
+- `tinycloud-gw link export` prints a code: the gateway host, its three IDs, its relay token, and its nodes. The relay token is secret, so send the code privately. It lists no folders; each side chooses on its own.
+- `tinycloud-gw link add NAME CODE` reads the code and shows a summary: the gateway, the node count, and the owners. The owner picks which of their owners' files to receive and which of the owner's own files to send, then says yes. Nothing is added before that. The default is none. `--accept` and `--offer` take owner lists for scripts.
+- Files flow for an owner only when the cloud that has them offers them and the other cloud accepts them. Both clouds run `link add` with the other's code, even for a one way link, because each side's nodes must know the other's.
+- A linked node is a device that gets only the folders chosen, as Receive Only on the receiving side. It never gets the introducer feature, and it can never add devices.
+- The gateway writes linked nodes into `peers.json` as `LINKNAME-NODE`, each with a `folders` list, and the linked gateways in `links`. Nodes then list the linked gateways' discovery and relay servers next to their own, so a node can find and reach linked nodes through either gateway. A peer without `folders` gets every folder, as before.
+- Running `link add` again with the same name and a fresh code updates the link, for when the other side adds a node. With `--yes` it keeps the earlier choices.
+- `link list` shows links. `link remove NAME` drops one, and the files already copied stay. Add, update, and remove are logged in `audit.log`, never with the token.
+- A link is refused if an owner name repeats, if a node name would repeat once the link name is added, or if the cloud would pass 64 nodes in all.
+- Rotating the relay token breaks every link until the other side adds a fresh code.
 
 ### When a gateway goes down
 

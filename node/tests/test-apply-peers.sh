@@ -284,4 +284,44 @@ rm -f "$TC_STATE_DIR/applied.sha"
 run_main
 assert_jq "options use the saved links" "$(body_of 'PATCH /rest/config/options')" '(.listenAddresses | length) == 2'
 
+lpeer() {
+  printf '{"name":"%s","id":"%s","role":"anchor","owner":"%s","folders":%s}' "$1" "$2" "$3" "$4"
+}
+
+setup
+peers_json "$(peer rocky "$ME" anchor),$(peer grace "$P1" anchor),$(lpeer finn-rocky "$P2" finn '["finn"]')" > "$PEERS_FILE"
+run_main
+assert_eq "accepted folder is created" 1 "$(count_calls 'PUT /rest/config/folders/tc-lib-finn')"
+assert_jq "accepted folder is receive only and shared with the linked node" "$(body_of 'PUT /rest/config/folders/tc-lib-finn')" "(.devices | map(.deviceID) | index(\"$P2\")) != null and .type == \"receiveonly\""
+assert_jq "own folder does not go to a linked node that was not offered it" "$(body_of 'PATCH /rest/config/folders/tc-lib-justin')" "(.devices | map(.deviceID) | index(\"$P2\")) == null and (.devices | map(.deviceID) | index(\"$P1\")) != null"
+assert_eq "linked device is added" 1 "$(count_calls "PUT /rest/config/devices/$P2")"
+
+setup
+peers_json "$(peer rocky "$ME" anchor),$(lpeer finn-rocky "$P2" finn '["justin"]')" > "$PEERS_FILE"
+run_main
+assert_jq "offered own folder goes to the linked node" "$(body_of 'PATCH /rest/config/folders/tc-lib-justin')" "(.devices | map(.deviceID) | index(\"$P2\")) != null"
+assert_eq "a folder that was not accepted is not created" 0 "$(count_calls 'PUT /rest/config/folders/tc-lib-finn')"
+
+setup
+peers_json "$(peer rocky "$ME" anchor),$(lpeer finn-rocky "$P2" finn '[]')" > "$PEERS_FILE"
+run_main
+assert_eq "linked node with nothing shared gets no folder" 0 "$(count_calls 'PUT /rest/config/folders/tc-lib-finn')"
+assert_jq "and is not in the own folder" "$(body_of 'PATCH /rest/config/folders/tc-lib-justin')" "(.devices | map(.deviceID) | index(\"$P2\")) == null"
+
+setup
+printf '%s\n' "$P2" > "$TC_STATE_DIR/managed.ids"
+printf '{"devices":[{"deviceID":"%s"},{"deviceID":"%s"}]}' "$ME" "$P2" > "$FAKE_DIR/folder-justin.json"
+peers_json "$(peer rocky "$ME" anchor),$(lpeer finn-rocky "$P2" finn '["finn"]')" > "$PEERS_FILE"
+run_main
+assert_jq "a linked node no longer offered the own folder is dropped from it" "$(body_of 'PATCH /rest/config/folders/tc-lib-justin')" "(.devices | map(.deviceID) | index(\"$P2\")) == null"
+
+setup
+peers_json "$(peer rocky "$ME" anchor),$(lpeer finn-rocky "$P2" finn '"x"')" > "$PEERS_FILE"
+run_main
+assert_contains "folders that is not a list is rejected" "$OUT" "folders is not a list"
+setup
+peers_json "$(peer rocky "$ME" anchor),$(lpeer finn-rocky "$P2" finn '["Bad Name"]')" > "$PEERS_FILE"
+run_main
+assert_contains "bad folder name is rejected" "$OUT" "bad folder name"
+
 finish
