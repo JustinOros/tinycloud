@@ -285,6 +285,7 @@ Test with a second gateway and a test node standing in for a friend's cloud.
 - The weekly backup timer works on the real gateway: its service saved a private backup on its own.
 - Per-owner folders work on real nodes: each owner's books sync between a Docker node on Unraid and an Orange Pi, and a delete on one node reaches the other.
 - The optional SMB share works on an Orange Pi: a file copied from a Mac over SMB arrived on the other node, and only the TinyCloud share is listed.
+- `tinycloud-gw remove` works against a real Syncthing.
 - Linked clouds work between two real gateways: a file added on a node in one cloud reached both nodes in the other, the other cloud's own files stayed home because they were not accepted, a delete on a receive-only node did not travel back, and removing the link dropped the other cloud's folder from the nodes.
 
 ## Still to verify
@@ -298,4 +299,3 @@ Test with a second gateway and a test node standing in for a friend's cloud.
 - The gateway reboot alert on a real server.
 - A missed heartbeat reaches Discord.
 - Everything works on Ubuntu as well as Debian.
-- `tinycloud-gw remove` against a real Syncthing.

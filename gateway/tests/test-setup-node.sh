@@ -302,6 +302,19 @@ SETUP_WAIT_TRIES=2
 SETUP_WAIT_SECONDS=0
 assert_eq "wait gives up" 1 "$(wait_join > /dev/null 2>&1 && echo 0 || echo 1)"
 
+DRY_RUN=false
+SMB=
+TARGET_USER=
+OWNER=testfinn
+printf '#!/bin/sh\necho "tinycloud-gw approve adrian X contributor justin"\n' > "$NODE_HOME/bin/tinycloud"
+out=$(finish_up 2>&1)
+assert_contains "copy hint names root when no user" "$out" "scp file.epub root@"
+assert_contains "copy hint names the owner folder" "$out" ":tinycloud/testfinn/"
+TARGET_USER=pat
+assert_contains "copy hint names the user" "$(finish_up 2>&1)" "scp file.epub pat@"
+TARGET_USER=
+OWNER=
+
 assert_eq "3 AM" 03:00 "$(time_24h '3:00 AM')"
 assert_eq "12 AM is midnight" 00:00 "$(time_24h '12:00 AM')"
 assert_eq "12 PM is noon" 12:00 "$(time_24h '12 pm')"

@@ -842,7 +842,7 @@ finish_up() {
   if [ -n "$TARGET_USER" ] && [ "$TARGET_USER" != root ]; then
     say "To use tinycloud without sudo, log out and back in once."
   fi
-  say "Copy files to this node from another machine with: scp file.epub $TARGET_USER@$(hostname):tinycloud/"
+  say "Copy files to this node from another machine with: scp file.epub ${TARGET_USER:-root}@$(hostname):tinycloud/${OWNER:-}/"
   if [ "$SMB" = yes ]; then
     say "From a PC on your network: \\\\$(hostname)\\tinycloud (Windows) or smb://$(hostname)/tinycloud (Mac)"
   fi
