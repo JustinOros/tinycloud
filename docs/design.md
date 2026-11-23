@@ -244,6 +244,7 @@ A node shows a warning when it is offline, low on space, has name conflicts, has
 - A shared folder of epubs syncs from a Docker node on Unraid to an Orange Pi on another network.
 - Offline and resolved alerts reach a real Discord webhook, with the wait time set by the owner.
 - The heartbeat pings healthchecks.io, which posts to Discord.
+- `tinycloud-gw backup` and `restore` work on a real server: a gateway identity restored onto a second Linode in another region matched the original, and restoring the second server's own backup put it back.
 
 ## Still to verify
 
