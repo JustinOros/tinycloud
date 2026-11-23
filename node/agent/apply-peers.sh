@@ -74,7 +74,7 @@ drop_old_folders() {
   done
   if st_api GET /rest/config/folders/tinycloud-library > /dev/null 2>&1; then
     if st_api DELETE /rest/config/folders/tinycloud-library > /dev/null; then
-      log WARN "old tinycloud-library folder removed, files kept"
+      log INFO "old tinycloud-library folder removed, files kept"
     else
       log WARN "could not remove the old tinycloud-library folder"
     fi
