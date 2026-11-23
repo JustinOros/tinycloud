@@ -329,7 +329,7 @@ check_download "$SANDBOX/dl.bin" url > "$SANDBOX/out" 2>&1
 assert_eq "missing checksum tolerated" 0 "$?"
 assert_contains "missing checksum said out loud" "$(cat "$SANDBOX/out")" "not checked"
 
-assert_eq "tested image is pinned" 1 "$(printf '%s' "$TESTED_URL" | grep -c 'trunk.120.*Orangepizero2w.*\.img\.xz$')"
+assert_eq "tested image is pinned" 1 "$(printf '%s' "$TESTED_URL" | grep -c 'trunk.130.*Orangepizero2w.*\.img\.xz$')"
 assert_eq "tested image is marked" "TESTED/WORKING" "$(image_status "$TESTED_URL")"
 assert_eq "other images are untested" "untested" "$(image_status https://x/26.11.0-trunk.119/a.img.xz)"
 assert_contains "trunk 137 is known bad" "$(image_status https://x/26.11.0-trunk.137/a.img.xz)" "KNOWN BAD"

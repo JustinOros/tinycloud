@@ -1,8 +1,8 @@
 #!/bin/sh
 set -u
 
-TESTED_TAG=26.11.0-trunk.120
-TESTED_URL=https://github.com/armbian/community/releases/download/26.11.0-trunk.120/Armbian_community_26.11.0-trunk.120_Orangepizero2w_trixie_current_6.18.60_minimal.img.xz
+TESTED_TAG=26.11.0-trunk.130
+TESTED_URL=https://github.com/armbian/community/releases/download/26.11.0-trunk.130/Armbian_community_26.11.0-trunk.130_Orangepizero2w_trixie_current_6.18.63_minimal.img.xz
 KNOWN_BAD_TAGS="26.11.0-trunk.137"
 RELEASES_API='https://api.github.com/repos/armbian/community/releases?per_page=6'
 WORK_DIR=${TC_FLASH_DIR:-${HOME:-/tmp}/Downloads}
