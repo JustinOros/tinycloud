@@ -110,10 +110,13 @@ alert_set recovered maybe > /dev/null 2>&1
 assert_eq "recovered junk rejected" no "$(alert_get ALERT_RECOVERED yes)"
 alert_set url 'not a url' > /dev/null 2>&1
 assert_eq "bad url rejected" "" "$(alert_get ALERT_URL '')"
-alert_set url 'https://ntfy.sh/secrettopic123' > /dev/null
-assert_eq "url saved" "https://ntfy.sh/secrettopic123" "$(alert_get ALERT_URL '')"
+alert_set url 'https://ntfy.sh/mytopic' > /dev/null 2>&1
+assert_eq "a non Discord address is rejected" "" "$(alert_get ALERT_URL '')"
+assert_eq "a non Discord address returns an error" 1 "$(alert_set url 'https://example.com/api/webhooks/1/x' > /dev/null 2>&1; echo $?)"
+alert_set url 'https://discord.com/api/webhooks/123/secrettopic123' > /dev/null
+assert_eq "url saved" "https://discord.com/api/webhooks/123/secrettopic123" "$(alert_get ALERT_URL '')"
 assert_eq "config is private" 600 "$(stat -c %a "$GW_HOME/alerts.conf")"
-assert_contains "show host only" "$(alert_show)" "sending to ntfy.sh)"
+assert_contains "show host only" "$(alert_show)" "sending to discord.com)"
 assert_not_contains "show hides topic" "$(alert_show)" "secrettopic123"
 alert_set bogus 5 > /dev/null 2>&1
 assert_eq "unknown setting rejected" 1 "$(alert_set bogus 5 > /dev/null 2>&1; echo $?)"
@@ -128,7 +131,7 @@ assert_eq "no url sends nothing" 0 "$(sent_count)"
 assert_eq "no url keeps no state" 0 "$([ -e "$GW_STATE/alerts.json" ] && echo 1 || echo 0)"
 
 reset
-alert_set url 'https://ntfy.sh/secrettopic123' > /dev/null
+alert_set url 'https://discord.com/api/webhooks/123/secrettopic123' > /dev/null
 alert_set offline 60m > /dev/null
 view "[$(node grace false)]"
 tick "$T0"
@@ -159,7 +162,7 @@ assert_eq "recovery sent once" 3 "$(sent_count)"
 assert_jq "state is empty after recovery" "$(cat "$GW_STATE/alerts.json")" '.p == {}'
 
 reset
-alert_set url 'https://ntfy.sh/t' > /dev/null
+alert_set url 'https://discord.com/api/webhooks/1/t' > /dev/null
 alert_set offline 60m > /dev/null
 view "[$(node grace false)]"
 tick "$T0"
@@ -170,7 +173,7 @@ tick $((T0 + 3600))
 assert_eq "a short blip never alerts" 0 "$(sent_count)"
 
 reset
-alert_set url 'https://ntfy.sh/t' > /dev/null
+alert_set url 'https://discord.com/api/webhooks/1/t' > /dev/null
 alert_set offline 5m > /dev/null
 alert_set low-space 0 > /dev/null
 alert_set conflicts 0 > /dev/null
@@ -186,7 +189,7 @@ assert_eq "offline follows once it is due" 2 "$(sent_count)"
 assert_contains "offline text" "$(cat "$SANDBOX/sent")" "offline for 5 minutes"
 
 reset
-alert_set url 'https://ntfy.sh/t' > /dev/null
+alert_set url 'https://discord.com/api/webhooks/1/t' > /dev/null
 alert_set offline 5m > /dev/null
 view "[$(node grace false)]"
 tick "$T0"
@@ -201,7 +204,7 @@ assert_eq "retries after a failure" 1 "$(sent_count)"
 assert_jq "state saved after success" "$(cat "$GW_STATE/alerts.json")" '.p["grace:offline"].notified > 0'
 
 reset
-alert_set url 'https://ntfy.sh/t' > /dev/null
+alert_set url 'https://discord.com/api/webhooks/1/t' > /dev/null
 alert_set offline 5m > /dev/null
 view "[$(node grace false)]"
 tick "$T0"
@@ -218,7 +221,7 @@ assert_contains "removed text" "$(cat "$SANDBOX/sent")" "grace (justin) was remo
 assert_jq "removed node leaves no state" "$(cat "$GW_STATE/alerts.json")" '.p == {}'
 
 reset
-alert_set url 'https://ntfy.sh/t' > /dev/null
+alert_set url 'https://discord.com/api/webhooks/1/t' > /dev/null
 alert_set offline 60m > /dev/null
 view "[$(node grace false)]"
 tick "$T0"
@@ -227,7 +230,7 @@ tick $((T0 + 300))
 assert_eq "removed node with no alert stays quiet" 0 "$(sent_count)"
 
 reset
-alert_set url 'https://ntfy.sh/t' > /dev/null
+alert_set url 'https://discord.com/api/webhooks/1/t' > /dev/null
 alert_set offline 5m > /dev/null
 alert_set recovered no > /dev/null
 view "[$(node grace false)]"
@@ -238,7 +241,7 @@ tick $((T0 + 600))
 assert_eq "recovered no sends nothing more" 1 "$(sent_count)"
 
 reset
-alert_set url 'https://ntfy.sh/t' > /dev/null
+alert_set url 'https://discord.com/api/webhooks/1/t' > /dev/null
 alert_set offline 5m > /dev/null
 alert_set reminder off > /dev/null
 view "[$(node grace false)]"
@@ -248,7 +251,7 @@ tick $((T0 + 90000)) 9
 assert_eq "reminders off" 1 "$(sent_count)"
 
 reset
-alert_set url 'https://ntfy.sh/t' > /dev/null
+alert_set url 'https://discord.com/api/webhooks/1/t' > /dev/null
 OLD=2026-11-19T00:00:00Z
 view "[$(REPORTED=$OLD node grace true)]"
 tick "$T0"
@@ -256,7 +259,7 @@ assert_eq "stale status alerts right away" 1 "$(sent_count)"
 assert_contains "stale status text" "$(cat "$SANDBOX/sent")" "has not reported its status"
 
 reset
-alert_set url 'https://ntfy.sh/t' > /dev/null
+alert_set url 'https://discord.com/api/webhooks/1/t' > /dev/null
 view "[$(jq -nc '{name: "grace", role: "contributor", owner: "justin", online: true, status: null}')]"
 tick "$T0"
 assert_eq "missing status waits" 0 "$(sent_count)"
@@ -273,7 +276,7 @@ assert_jq "discord body is json" "$(sed -n 1p "$SANDBOX/sent")" '.content | test
 assert_contains "discord header" "$(cat "$SANDBOX/curl.args")" "application/json"
 
 reset
-alert_set url 'https://ntfy.sh/t' > /dev/null
+alert_set url 'https://discord.com/api/webhooks/1/t' > /dev/null
 assert_eq "test command works" sent "$(alert_test)"
 assert_contains "test message" "$(cat "$SANDBOX/sent")" "TinyCloud test alert"
 echo 1 > "$SANDBOX/curl.rc"
@@ -282,7 +285,7 @@ alert_set url off > /dev/null
 assert_eq "test without url fails" 1 "$(alert_test > /dev/null 2>&1; echo $?)"
 
 reset
-alert_set url 'https://ntfy.sh/t' > /dev/null
+alert_set url 'https://discord.com/api/webhooks/1/t' > /dev/null
 alert_set offline 5m > /dev/null
 view "[$(node grace false)]"
 printf 'garbage' > "$GW_STATE/alerts.json"
@@ -322,7 +325,7 @@ alert_set gateway-reboot 1h > /dev/null
 assert_eq "gateway reboot saved" 60 "$(alert_get ALERT_GWREBOOT 0)"
 assert_contains "show gateway reboot" "$(alert_show)" "gw reboot after    1 hour"
 alert_set gateway-reboot 36h > /dev/null
-alert_set url 'https://ntfy.sh/t' > /dev/null
+alert_set url 'https://discord.com/api/webhooks/1/t' > /dev/null
 view "[$(node grace true)]"
 touch -d "@$((T0 - 3600))" "$ALERT_REBOOT_FILE"
 tick "$T0"

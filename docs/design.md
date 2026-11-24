@@ -182,11 +182,11 @@ Phase 5. Read-only. Lives in `apps/discord-bot/`. Each owner runs their own.
 - It reads one mounted `view.json`. No Syncthing key, no SSH, no CLI.
 - A stolen bot token can only read status.
 - Only allowed Discord user IDs, one channel, no open port.
-- Webhook or ntfy alerts still work without it.
+- Discord alerts still work without it.
 
 ## Alerts
 
-The gateway can tell you when something is wrong. It sends one message to a Discord webhook or an ntfy topic. There is no bot and no open port.
+The gateway can tell you when something is wrong. It sends one message to a Discord webhook. There is no bot and no open port.
 
 - Turn it on with `tinycloud-gw alert set url ADDRESS`, then check it with `tinycloud-gw alert test`. With no address, alerts are off.
 - It runs after every status build and reads the same view the dashboard shows.
@@ -296,7 +296,3 @@ Test with a second gateway and a test node standing in for a friend's cloud.
 - The optional SMB share works on an Orange Pi: a file copied from a Mac over SMB arrived on the other node, and only the TinyCloud share is listed.
 - `tinycloud-gw remove` works against a real Syncthing.
 - Linked clouds work between two real gateways: a file added on a node in one cloud reached both nodes in the other, the other cloud's own files stayed home because they were not accepted, a delete on a receive-only node did not travel back, and removing the link dropped the other cloud's folder from the nodes.
-
-## Still to verify
-
-- Alerts reach a real ntfy topic.

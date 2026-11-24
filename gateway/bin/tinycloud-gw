@@ -36,7 +36,7 @@ usage: tinycloud-gw COMMAND
   rotate-token [--yes]                       make a new relay token
   version
 
-alert settings: url ADDRESS|off, heartbeat ADDRESS|off, reminder 9am|off, recovered yes|no,
+alert settings: url DISCORD-WEBHOOK|off, heartbeat ADDRESS|off, reminder 9am|off, recovered yes|no,
                 offline, no-status, low-space, conflicts, reboot, gateway-reboot (times like 5m, 60m, 2h, 1d)
 EOT
 }

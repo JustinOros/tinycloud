@@ -115,6 +115,10 @@ valid_alert_url() {
   valid "$1" '^https?://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]{4,500}$'
 }
 
+valid_discord_url() {
+  valid "$1" '^https://(discord|discordapp)\.com/api/webhooks/[0-9]{1,30}/[A-Za-z0-9_-]{1,200}$'
+}
+
 alert_setting_key() {
   case $1 in
     offline) printf 'ALERT_OFFLINE' ;;
@@ -149,8 +153,8 @@ alert_set() {
         echo "alerts are off"
         return 0
       fi
-      if ! valid_alert_url "$as_value"; then
-        log ERROR "that does not look like a web address (http or https)"
+      if ! valid_discord_url "$as_value"; then
+        log ERROR "that is not a Discord webhook address (https://discord.com/api/webhooks/...)"
         return 1
       fi
       alert_put ALERT_URL "$as_value"
@@ -249,17 +253,10 @@ alert_send() {
   sd_url=$(alert_get ALERT_URL "")
   [ -n "$sd_url" ] || return 1
   sd_msg=$(printf '%s' "$1" | head -c 1800)
-  case $sd_url in
-    https://discord.com/api/webhooks/* | https://discordapp.com/api/webhooks/*)
-      sd_body=$(jq -nc --arg c "$sd_msg" '{content: $c}')
-      printf 'url = "%s"\n' "$sd_url" | curl -fsS -K - --max-time 15 -o /dev/null \
-        -H 'Content-Type: application/json' --data-raw "$sd_body" 2> /dev/null
-      ;;
-    *)
-      printf 'url = "%s"\n' "$sd_url" | curl -fsS -K - --max-time 15 -o /dev/null \
-        -H 'Title: TinyCloud' --data-raw "$sd_msg" 2> /dev/null
-      ;;
-  esac
+  valid_discord_url "$sd_url" || return 1
+  sd_body=$(jq -nc --arg c "$sd_msg" '{content: $c}')
+  printf 'url = "%s"\n' "$sd_url" | curl -fsS -K - --max-time 15 -o /dev/null \
+    -H 'Content-Type: application/json' --data-raw "$sd_body" 2> /dev/null
 }
 
 heartbeat_ping() {
