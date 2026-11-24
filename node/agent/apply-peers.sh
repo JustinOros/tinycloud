@@ -172,7 +172,8 @@ main() {
   fi
   mkdir -p "$TC_STATE_DIR"
   sha=$(sha256 "$PEERS_FILE")
-  if [ "$sha" = "$(read_state applied.sha)" ] && [ "$(read_state layout)" = 2 ]; then
+  folder_fp=$(sha256_text "$(owner_folder_extra 2> /dev/null)")
+  if [ "$sha" = "$(read_state applied.sha)" ] && [ "$(read_state layout)" = 2 ] && [ "$folder_fp" = "$(read_state folder.fp)" ]; then
     return 0
   fi
   result=$(check_peers_file "$PEERS_FILE")
@@ -186,6 +187,7 @@ main() {
   apply_peers "$(printf '%s' "$result" | jq -c '.peers')" || return 1
   apply_links "$(printf '%s' "$result" | jq -c '.links')" || return 1
   write_atomic "$(state_file applied.sha)" "$sha"
+  write_atomic "$(state_file folder.fp)" "$folder_fp"
   write_atomic "$(state_file layout)" 2
 }
 

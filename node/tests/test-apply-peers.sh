@@ -50,6 +50,12 @@ assert_jq "device body has dynamic address and no introducer" "$(body_of "PUT /r
 assert_jq "folder shares with new peers" "$(body_of 'PATCH /rest/config/folders/tc-lib-justin')" "(.devices | map(.deviceID) | sort) == ([\"$ME\", \"$P1\", \"$P2\"] | sort)"
 assert_eq "the patch keeps the pull order and free space floor" '["devices","minDiskFree","order"]' "$(body_of 'PATCH /rest/config/folders/tc-lib-justin' | jq -c 'keys')"
 assert_jq "the free space floor is not the Syncthing default" "$(body_of 'PATCH /rest/config/folders/tc-lib-justin')" '.minDiskFree.unit == "MB" and .minDiskFree.value >= 1024'
+first_patches=$(count_calls 'PATCH /rest/config/folders/tc-lib-justin')
+run_main
+assert_eq "an unchanged file and settings apply nothing again" "$first_patches" "$(count_calls 'PATCH /rest/config/folders/tc-lib-justin')"
+conf_set "$TC_CONF" FREE_SPACE_PERCENT 20
+run_main
+assert_eq "a new free space setting is applied to the folder" "$((first_patches + 1))" "$(count_calls 'PATCH /rest/config/folders/tc-lib-justin')"
 assert_eq "layout marker written" 2 "$(cat "$TC_STATE_DIR/layout")"
 assert_eq "managed ids saved" "$(printf '%s\n%s' "$P1" "$P2")" "$(cat "$TC_STATE_DIR/managed.ids")"
 
