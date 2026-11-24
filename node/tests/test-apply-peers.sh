@@ -48,7 +48,8 @@ assert_eq "peer 1 added" 1 "$(count_calls "PUT /rest/config/devices/$P1")"
 assert_eq "peer 2 added" 1 "$(count_calls "PUT /rest/config/devices/$P2")"
 assert_jq "device body has dynamic address and no introducer" "$(body_of "PUT /rest/config/devices/$P1")" '.addresses == ["dynamic"] and .introducer == false and .autoAcceptFolders == false and .name == "grace"'
 assert_jq "folder shares with new peers" "$(body_of 'PATCH /rest/config/folders/tc-lib-justin')" "(.devices | map(.deviceID) | sort) == ([\"$ME\", \"$P1\", \"$P2\"] | sort)"
-assert_eq "only the devices key is patched" '["devices"]' "$(body_of 'PATCH /rest/config/folders/tc-lib-justin' | jq -c 'keys')"
+assert_eq "the patch keeps the pull order and free space floor" '["devices","minDiskFree","order"]' "$(body_of 'PATCH /rest/config/folders/tc-lib-justin' | jq -c 'keys')"
+assert_jq "the free space floor is not the Syncthing default" "$(body_of 'PATCH /rest/config/folders/tc-lib-justin')" '.minDiskFree.unit == "MB" and .minDiskFree.value >= 1024'
 assert_eq "layout marker written" 2 "$(cat "$TC_STATE_DIR/layout")"
 assert_eq "managed ids saved" "$(printf '%s\n%s' "$P1" "$P2")" "$(cat "$TC_STATE_DIR/managed.ids")"
 

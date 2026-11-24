@@ -56,11 +56,12 @@ ids_json() {
 sync_owner_folder() {
   sof_id=tc-lib-$1
   if sof_cur=$(st_api GET "/rest/config/folders/$sof_id" 2> /dev/null); then
-    sof_body=$(printf '%s' "$sof_cur" | jq -c --argjson rm "$3" --argjson want "$4" '
+    sof_extra=$(owner_folder_extra) || return 1
+    sof_body=$(printf '%s' "$sof_cur" | jq -c --argjson rm "$3" --argjson want "$4" --argjson extra "$sof_extra" '
       .devices as $cur
       | ($cur | map(select(.deviceID as $d | ($rm | index($d)) == null))) as $kept
       | ($kept | map(.deviceID)) as $have
-      | {devices: ($kept + ($want | map(select(. as $d | ($have | index($d)) == null) | {deviceID: .})))}')
+      | {devices: ($kept + ($want | map(select(. as $d | ($have | index($d)) == null) | {deviceID: .})))} + $extra')
     st_api PATCH "/rest/config/folders/$sof_id" "$sof_body" > /dev/null || {
       log ERROR "could not update folder $1"
       return 1
