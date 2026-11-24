@@ -428,10 +428,10 @@ choose_channel() {
   fi
   [ "$ASSUME_YES" = true ] && return 0
   say "Update TinyCloud itself every night:"
-  say "  1) stable   tested releases (recommended)"
+  say "  1) stable   tested releases"
   say "  2) testing  newest changes, may break"
   say "  3) off      update by hand"
-  choose_value "Which channel? (number)" 1 valid_channel_choice || return 1
+  choose_value "Which channel? (number)" 3 valid_channel_choice || return 1
   CHANNEL=$(channel_name "$ANSWER")
 }
 

@@ -18,7 +18,7 @@ Setup also asks whether to install Debian security updates automatically (defaul
 
 It also offers a firewall (default yes) that blocks everything inbound except SSH from your local network, and SSH hardening (default yes) that turns off password login when a key is installed, keeps root key-only, and adds fail2ban. Flags: `--firewall yes|no` and `--ssh-hardening yes|no`. If your SSH comes from outside a private network (not 10.x, 172.16-31.x, 192.168.x, or Tailscale), the firewall would block you, so say no to it.
 
-Setup also asks which channel to follow for nightly updates of TinyCloud itself at about 4:00 AM: `stable` (default), `testing` (the `main` branch), or `off`. Flag: `--channel stable|testing|off`. An update backs up the old version, pulls newer container images, and rolls back by itself if the node does not come up healthy. The dashboard shows a "Reboot needed" warning when an update has needed a reboot for more than 36 hours. To publish a release to the stable channel: `git push origin main:stable`.
+Setup also asks which channel to follow for nightly updates of TinyCloud itself at about 4:00 AM: `off` (default), `stable` (tested releases), or `testing` (the `main` branch). Flag: `--channel stable|testing|off`. An update backs up the old version, pulls newer container images, and rolls back by itself if the node does not come up healthy. The dashboard shows a "Reboot needed" warning when an update has needed a reboot for more than 36 hours. To publish a release to the stable channel: `git push origin main:stable`.
 
 ## Prepare an SD card
 
