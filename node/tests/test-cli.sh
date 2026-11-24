@@ -49,6 +49,11 @@ assert_eq "bad log component runs nothing" 0 "$(wc -l < "$CALLS" | tr -d ' ')"
 out=$(main logs syncthing)
 assert_eq "logs asks for 200 lines" "logs --no-log-prefix --tail 200 syncthing" "$(cat "$CALLS")"
 assert_contains "logs localized" "$out" "2026-11-21 10:38:38 AM log line"
+assert_not_contains "logs hide the relay token" "$out" "s3cr3t-token"
+assert_contains "logs keep the rest of the line" "$out" "using REDACTED"
+relay_line=$(printf 'Relay listener (relay://gw.example.com:22067/?id=ABC&token=linkedtok99) starting\n' | hide_token)
+assert_contains "any token in a relay address is hidden" "$relay_line" "id=ABC&token=REDACTED) starting"
+assert_not_contains "a linked gateway token is hidden" "$relay_line" "linkedtok99"
 
 : > "$CALLS"
 main debug on > /dev/null

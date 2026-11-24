@@ -71,15 +71,18 @@ localize_stream() {
   done
 }
 
-scrub() {
-  sc_token=$(conf_value RELAY_TOKEN)
-  if [ -n "$sc_token" ] && printf '%s' "$sc_token" | grep -Eq '^[A-Za-z0-9_-]{1,128}$'; then
-    sed -E -e "s/$sc_token/REDACTED/g" -e 's/[0-9]{1,3}(\.[0-9]{1,3}){3}/x.x.x.x/g' \
-      -e 's/([0-9A-Fa-f]{1,4}:){3,7}[0-9A-Fa-f]{1,4}/x:x:x:x/g'
+hide_token() {
+  ht_token=$(conf_value RELAY_TOKEN)
+  if [ -n "$ht_token" ] && printf '%s' "$ht_token" | grep -Eq '^[A-Za-z0-9_-]{1,128}$'; then
+    sed -E -e "s/$ht_token/REDACTED/g" -e 's/(token=)[A-Za-z0-9_-]+/\1REDACTED/g'
   else
-    sed -E -e 's/[0-9]{1,3}(\.[0-9]{1,3}){3}/x.x.x.x/g' \
-      -e 's/([0-9A-Fa-f]{1,4}:){3,7}[0-9A-Fa-f]{1,4}/x:x:x:x/g'
+    sed -E -e 's/(token=)[A-Za-z0-9_-]+/\1REDACTED/g'
   fi
+}
+
+scrub() {
+  hide_token | sed -E -e 's/[0-9]{1,3}(\.[0-9]{1,3}){3}/x.x.x.x/g' \
+    -e 's/([0-9A-Fa-f]{1,4}:){3,7}[0-9A-Fa-f]{1,4}/x:x:x:x/g'
 }
 
 redact_conf() {
@@ -99,7 +102,7 @@ cmd_logs() {
       return 2
       ;;
   esac
-  dc logs --no-log-prefix --tail "${TC_LOG_LINES:-200}" "$cl_component" 2>&1 | localize_stream
+  dc logs --no-log-prefix --tail "${TC_LOG_LINES:-200}" "$cl_component" 2>&1 | localize_stream | hide_token
 }
 
 cmd_debug() {
