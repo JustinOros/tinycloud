@@ -6,16 +6,16 @@ Nodes only connect out. Files are encrypted before they leave a node, so the gat
 
 ```mermaid
 flowchart LR
-    subgraph home1[Your home]
-        A[Node A]
-    end
     subgraph home2[A friend's home]
         B[Node B]
     end
+    subgraph home1[Your home]
+        A[Node A]
+    end
     G[Gateway<br/>relay, discovery, approvals]
     D[Dashboard and Discord alerts]
-    A <-->|outbound only| G
     B <-->|outbound only| G
+    A <-->|outbound only| G
     G --> D
 ```
 
