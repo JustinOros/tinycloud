@@ -3,7 +3,8 @@
 A private file cloud for trusted friends. Nodes sync your shared files through a gateway. Nobody controls anyone else's node.
 
 - [Design](docs/design.md)
+- [Diagrams](docs/diagrams.md)
 - [Gateway setup](docs/gateway.md)
 - [Run a node](node/README.md)
 
-Status: early. One gateway and two nodes sync files both ways, with a status dashboard, alerts, and automatic security updates. The site and Pi images are not built yet.
+Status: working and tested on real hardware, with a dashboard, Discord alerts, weekly gateway backups, optional automatic updates, and linked clouds. The website and Pi images are not built yet.
