@@ -24,16 +24,11 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     participant N as New node
-    participant P as Person
     participant O as Owner
     participant G as Gateway
-    N->>P: tinycloud join prints a line and a short code
-    P->>O: sends the line
-    O->>G: tinycloud-gw approve NAME DEVICEID ROLE OWNER
-    G->>O: prints the code
-    O-->>P: compare the codes
-    G-->>N: node is approved
-    N->>G: connects and starts syncing
+    N->>O: join line and short code
+    O->>G: tinycloud-gw approve (codes must match)
+    G->>N: approved, syncing starts
 ```
 
 ## Two clouds linked
