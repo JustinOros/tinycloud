@@ -288,6 +288,7 @@ Test with a second gateway and a test node standing in for a friend's cloud.
 - The firewall works on a real board: from another host on the LAN only SSH answered, and the Syncthing, web and sync ports were dropped.
 - Local discovery is off on a real node, and its peer traffic (4.4 GB from another node) ran only through the relay. Two nodes on the same network have not been tested together.
 - The free space floor works on a real node: on a nearly full card Syncthing refused a new file with an insufficient space error and filled nothing, the low space alert reached Discord (NEW, then RESOLVED), and the file arrived once space was freed. This found a bug: updating a folder's devices reset the floor to Syncthing's default, so the agent now sends the floor and pull order with every update.
+- No secret reaches a log or the support bundle: the gateway webhook, heartbeat address and relay token were searched for in the gateway journal, container logs and audit log, and a node's relay token in its logs and bundle. This found that `tinycloud logs` printed the relay token, and that a linked gateway's token was not hidden. Both are fixed.
 - Gateway RAM is fine on 1 GB with 2 nodes: the three containers use about 58 MB and over half the memory is free. Not yet measured with many nodes.
 - Per-owner folders work on real nodes: each owner's books sync between a Docker node on Unraid and an Orange Pi, and a delete on one node reaches the other.
 - The optional SMB share works on an Orange Pi: a file copied from a Mac over SMB arrived on the other node, and only the TinyCloud share is listed.
@@ -297,7 +298,6 @@ Test with a second gateway and a test node standing in for a friend's cloud.
 ## Still to verify
 
 - Pull order (smallest first) on a real node.
-- No secret in any log or support bundle.
 - Alerts reach a real ntfy topic.
 - The gateway reboot alert on a real server.
 - Everything works on Ubuntu as well as Debian.
