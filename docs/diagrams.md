@@ -38,8 +38,8 @@ Each person manages only their own gateway, nodes and data. A link gives each si
 ```mermaid
 flowchart LR
     subgraph c1[Cloud 1]
-        A1[Node A]
         B1[Node B]
+        A1[Node A]
         G1[Gateway 1]
     end
     subgraph c2[Cloud 2]
@@ -47,8 +47,8 @@ flowchart LR
         A2[Node A]
         B2[Node B]
     end
-    A1 <--> G1
     B1 <--> G1
+    A1 <--> G1
     G1 <-->|link code, read-only copies| G2
     G2 <--> A2
     G2 <--> B2
