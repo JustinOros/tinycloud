@@ -26,10 +26,10 @@ assert_contains "ssh port default" "$out" "open only ports 22 (SSH)"
 assert_contains "dry run finishes" "$out" "dry run finished, nothing changed"
 
 printf 'gw.example.com\n2222\n\n\n\ny\n' > "$SANDBOX/in2"
-out=$(run_setup ubuntu2404 "$SANDBOX/in2" --dry-run)
+out=$(run_setup debian12 "$SANDBOX/in2" --dry-run)
 assert_contains "custom ssh port" "$out" "open only ports 2222 (SSH)"
-assert_contains "ubuntu shown" "$out" "System: ubuntu 24.04 (noble)"
-assert_contains "ubuntu docker repo" "$out" "download.docker.com/linux/ubuntu"
+assert_contains "debian 12 shown" "$out" "System: debian 12 (bookworm)"
+assert_contains "debian docker repo" "$out" "download.docker.com/linux/debian"
 
 printf 'gw.example.com\n\n\n\n\nn\n' > "$SANDBOX/in3"
 out=$(run_setup debian13 "$SANDBOX/in3" --dry-run)

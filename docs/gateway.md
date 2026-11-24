@@ -4,7 +4,7 @@ One small Linode. Relay, discovery, and approvals. It never holds the library.
 
 ## Install
 
-On a fresh Debian 12+ or Ubuntu 22.04+ server, as root:
+On a fresh Debian 12+ server, as root:
 
 ```
 curl -fsSL https://raw.githubusercontent.com/JustinOros/tinycloud/main/setup.sh -o setup.sh && sh setup.sh

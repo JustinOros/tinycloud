@@ -398,7 +398,7 @@ main() {
   find_tree || return 1
   load_lib
   if ! detect_os || ! os_supported; then
-    fail "unsupported system: ${os_id:-unknown} ${os_version:-}. Use Debian 12 or newer, or Ubuntu 22.04 or newer."
+    fail "unsupported system: ${os_id:-unknown} ${os_version:-}. Use Debian 12 or newer."
     return 1
   fi
   say "System: $os_id $os_version ($os_codename)"

@@ -340,9 +340,6 @@ assert_contains "reboot with users" "$(render_node_unattended)" 'Automatic-Reboo
 AUTO_REBOOT=no
 assert_contains "reboot off" "$(render_node_unattended)" 'Automatic-Reboot "false"'
 assert_not_contains "no time when off" "$(render_node_unattended)" 'Reboot-Time'
-os_id=ubuntu
-os_codename=noble
-assert_contains "ubuntu origin" "$(render_node_unattended)" 'archive=noble-security'
 assert_contains "periodic on" "$(render_node_periodic)" 'Unattended-Upgrade "1"'
 
 DRY_RUN=false

@@ -38,10 +38,6 @@ detect_os() {
   os_id=$(sed -n 's/^ID=//p' "$GW_OS_RELEASE" | head -n 1 | tr -d '"')
   os_version=$(sed -n 's/^VERSION_ID=//p' "$GW_OS_RELEASE" | head -n 1 | tr -d '"')
   os_codename=$(sed -n 's/^VERSION_CODENAME=//p' "$GW_OS_RELEASE" | head -n 1 | tr -d '"')
-  os_ubuntu_codename=$(sed -n 's/^UBUNTU_CODENAME=//p' "$GW_OS_RELEASE" | head -n 1 | tr -d '"')
-  if [ "$os_id" = ubuntu ] && [ -n "$os_ubuntu_codename" ]; then
-    os_codename=$os_ubuntu_codename
-  fi
   [ -n "$os_id" ]
 }
 
@@ -51,10 +47,6 @@ os_supported() {
     debian)
       os_major=${os_version%%.*}
       valid "$os_major" '^[0-9]{1,3}$' && [ "$os_major" -ge 12 ]
-      ;;
-    ubuntu)
-      os_num=$(printf '%s' "$os_version" | tr -d '.')
-      valid "$os_num" '^[0-9]{4}$' && [ "$os_num" -ge 2204 ]
       ;;
     *) return 1 ;;
   esac

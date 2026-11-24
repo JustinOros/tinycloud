@@ -16,9 +16,8 @@ assert_contains "debian firewall file" "$out" "write /etc/nftables.conf"
 assert_contains "debian stack up" "$out" "docker compose"
 assert_contains "debian installs admin command" "$out" "/usr/local/bin/tinycloud-gw"
 
-out=$(dry ubuntu2404)
-assert_contains "ubuntu dry run ends" "$out" "dry run finished, nothing changed"
-assert_contains "ubuntu docker key" "$out" "download.docker.com/linux/ubuntu/gpg"
+out=$(dry ubuntu2404 || true)
+assert_contains "ubuntu refused" "$out" "unsupported system"
 
 out=$(dry fedora || true)
 assert_contains "fedora refused" "$out" "unsupported system"
@@ -67,11 +66,6 @@ assert_contains "reboot time set" "$(render_unattended)" 'Automatic-Reboot-Time 
 assert_contains "reboot with users" "$(render_unattended)" 'Automatic-Reboot-WithUsers "true"'
 AUTO_REBOOT=no
 
-GW_OS_RELEASE=$HERE/fixtures/ubuntu2404
-detect_os
-assert_contains "ubuntu docker sources" "$(render_docker_sources)" "URIs: https://download.docker.com/linux/ubuntu"
-assert_contains "ubuntu docker suite" "$(render_docker_sources)" "Suites: noble"
-assert_contains "ubuntu security origin" "$(render_unattended)" "origin=Ubuntu,archive=noble-security"
 
 assert_contains "ssh no passwords" "$(render_ssh)" "PasswordAuthentication no"
 assert_contains "ssh no kbd" "$(render_ssh)" "KbdInteractiveAuthentication no"

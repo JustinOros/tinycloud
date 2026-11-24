@@ -300,4 +300,3 @@ Test with a second gateway and a test node standing in for a friend's cloud.
 ## Still to verify
 
 - Alerts reach a real ntfy topic.
-- Everything works on Ubuntu as well as Debian.

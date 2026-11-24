@@ -2,7 +2,7 @@
 
 ## Run a node
 
-On a Debian 12+ or Ubuntu 22.04+ machine, run:
+On a Debian 12+ machine, run:
 
 ```
 curl -fsSL https://raw.githubusercontent.com/JustinOros/tinycloud/main/setup-node.sh -o setup-node.sh && sh setup-node.sh

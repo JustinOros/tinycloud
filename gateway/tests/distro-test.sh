@@ -8,7 +8,7 @@ if ! docker info > /dev/null 2>&1; then
   exit 1
 fi
 
-for image in debian:12 debian:13 ubuntu:22.04 ubuntu:24.04; do
+for image in debian:12 debian:13; do
   printf '%s: ' "$image"
   if docker run --rm -v "$ROOT:/gw:ro" "$image" sh /gw/gateway.sh --dry-run --host gw.example.com 2>&1 | tail -n 1 | grep -q "dry run finished"; then
     echo ok

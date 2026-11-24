@@ -17,17 +17,12 @@ check_os_file() {
 assert_eq "debian 12 supported" yes "$(check_os_file debian12)"
 assert_eq "debian 13 supported" yes "$(check_os_file debian13)"
 assert_eq "debian 11 rejected" no "$(check_os_file debian11)"
-assert_eq "ubuntu 22.04 supported" yes "$(check_os_file ubuntu2204)"
-assert_eq "ubuntu 24.04 supported" yes "$(check_os_file ubuntu2404)"
-assert_eq "ubuntu 20.04 rejected" no "$(check_os_file ubuntu2004)"
+assert_eq "ubuntu 24.04 rejected" no "$(check_os_file ubuntu2404)"
 assert_eq "fedora rejected" no "$(check_os_file fedora)"
 assert_eq "mint rejected" no "$(check_os_file mint)"
 GW_OS_RELEASE=$HERE/fixtures/missing
 assert_eq "missing os-release" 1 "$(detect_os && echo 0 || echo 1)"
 
-GW_OS_RELEASE=$HERE/fixtures/ubuntu2404
-detect_os
-assert_eq "ubuntu codename" noble "$os_codename"
 GW_OS_RELEASE=$HERE/fixtures/debian12
 detect_os
 assert_eq "debian codename" bookworm "$os_codename"

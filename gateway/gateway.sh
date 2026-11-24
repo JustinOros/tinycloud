@@ -107,7 +107,7 @@ check_os() {
     return 1
   fi
   if ! os_supported; then
-    log ERROR "unsupported system: $os_id $os_version (need Debian 12 or newer, or Ubuntu 22.04 or newer)"
+    log ERROR "unsupported system: $os_id $os_version (need Debian 12 or newer)"
     return 1
   fi
   log INFO "system: $os_id $os_version ($os_codename)"
@@ -129,11 +129,7 @@ render_docker_sources() {
 
 render_unattended() {
   printf 'Unattended-Upgrade::Origins-Pattern {\n'
-  if [ "$os_id" = ubuntu ]; then
-    printf '  "origin=Ubuntu,archive=%s-security";\n' "$os_codename"
-  else
-    printf '  "origin=Debian,codename=%s-security,label=Debian-Security";\n' "$os_codename"
-  fi
+  printf '  "origin=Debian,codename=%s-security,label=Debian-Security";\n' "$os_codename"
   printf '  "origin=Docker";\n};\n'
   if [ "$AUTO_REBOOT" = yes ]; then
     printf 'Unattended-Upgrade::Automatic-Reboot "true";\n'

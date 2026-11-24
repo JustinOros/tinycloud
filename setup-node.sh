@@ -473,11 +473,7 @@ update_summary() {
 
 render_node_unattended() {
   printf 'Unattended-Upgrade::Origins-Pattern {\n'
-  if [ "$os_id" = ubuntu ]; then
-    printf '  "origin=Ubuntu,archive=%s-security";\n' "$os_codename"
-  else
-    printf '  "origin=Debian,codename=%s-security,label=Debian-Security";\n' "$os_codename"
-  fi
+  printf '  "origin=Debian,codename=%s-security,label=Debian-Security";\n' "$os_codename"
   printf '};\n'
   if [ "$AUTO_REBOOT" = yes ]; then
     printf 'Unattended-Upgrade::Automatic-Reboot "true";\n'
@@ -861,7 +857,7 @@ main() {
   find_tree || return 1
   load_lib
   if ! detect_os || ! os_supported; then
-    fail "unsupported system: ${os_id:-unknown} ${os_version:-}. Use Debian 12 or newer, or Ubuntu 22.04 or newer."
+    fail "unsupported system: ${os_id:-unknown} ${os_version:-}. Use Debian 12 or newer."
     return 1
   fi
   say "System: $os_id $os_version ($os_codename)"
